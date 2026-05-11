@@ -1,0 +1,4 @@
+-- AlterTable
+ALTER TABLE "Investment" ADD COLUMN     "cdiMonthlyRate" DECIMAL(8,2) NOT NULL DEFAULT 0,
+ADD COLUMN     "cdiPercent" DECIMAL(8,2) NOT NULL DEFAULT 100,
+ADD COLUMN     "monthlyYieldRate" DECIMAL(8,2) NOT NULL DEFAULT 0;

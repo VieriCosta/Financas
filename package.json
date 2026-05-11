@@ -1,0 +1,22 @@
+{
+  "name": "financas-pessoais",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Aplicativo pessoal de gestao financeira com React, Node.js, Prisma e PostgreSQL.",
+  "workspaces": [
+    "frontend",
+    "backend"
+  ],
+  "scripts": {
+    "dev": "concurrently \"npm run dev -w backend\" \"npm run dev:frontend\"",
+    "dev:frontend": "npm run start:frontend",
+    "start:frontend": "npm run build -w frontend && npm run preview -w frontend",
+    "build": "npm run build -w backend && npm run build -w frontend",
+    "lint": "npm run lint -w backend && npm run lint -w frontend",
+    "format": "prettier --write \"**/*.{ts,tsx,js,json,md,css,yml}\""
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2",
+    "prettier": "^3.4.2"
+  }
+}

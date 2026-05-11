@@ -1,0 +1,128 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum TransactionType {
+  INCOME
+  EXPENSE
+}
+
+enum BillStatus {
+  PENDING
+  PAID
+}
+
+enum InvestmentType {
+  STOCK
+  CRYPTO
+  FIXED_INCOME
+  EMERGENCY_RESERVE
+  OTHER
+}
+
+model User {
+  id           String        @id @default(uuid())
+  name         String
+  email        String        @unique
+  passwordHash String
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  categories   Category[]
+  transactions Transaction[]
+  bills        Bill[]
+  investments  Investment[]
+  goals        Goal[]
+  resetTokens   PasswordResetToken[]
+}
+
+model PasswordResetToken {
+  id        String   @id @default(uuid())
+  tokenHash String   @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+model Category {
+  id           String            @id @default(uuid())
+  name         String
+  color        String            @default("#2563eb")
+  icon         String            @default("Wallet")
+  type         TransactionType?
+  userId       String
+  user         User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions Transaction[]
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+
+  @@unique([userId, name])
+}
+
+model Transaction {
+  id          String          @id @default(uuid())
+  description String
+  amount      Decimal         @db.Decimal(12, 2)
+  type        TransactionType
+  date        DateTime
+  notes       String?
+  userId      String
+  user        User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  categoryId  String?
+  category    Category?       @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+}
+
+model Bill {
+  id          String     @id @default(uuid())
+  title       String
+  amount      Decimal    @db.Decimal(12, 2)
+  dueDate     DateTime
+  status      BillStatus @default(PENDING)
+  isRecurring Boolean    @default(false)
+  recurrenceDay Int?
+  reminderAt  DateTime?
+  userId      String
+  user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+}
+
+model Investment {
+  id              String         @id @default(uuid())
+  name            String
+  type            InvestmentType
+  currentValue    Decimal        @db.Decimal(12, 2)
+  investedAmount  Decimal        @db.Decimal(12, 2)
+  contribution    Decimal        @db.Decimal(12, 2)
+  profitability   Decimal        @db.Decimal(8, 2)
+  monthlyYieldRate Decimal       @default(0) @db.Decimal(8, 2)
+  cdiMonthlyRate   Decimal       @default(0) @db.Decimal(8, 2)
+  cdiPercent       Decimal       @default(100) @db.Decimal(8, 2)
+  referenceDate   DateTime       @default(now())
+  userId          String
+  user            User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+}
+
+model Goal {
+  id            String   @id @default(uuid())
+  title         String
+  targetAmount  Decimal  @db.Decimal(12, 2)
+  currentAmount Decimal  @db.Decimal(12, 2)
+  deadline      DateTime?
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
