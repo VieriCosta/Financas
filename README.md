@@ -115,7 +115,7 @@ Sem SMTP, o backend imprime o link no console para teste local.
 4. Build command:
 
 ```bash
-npm install && npx prisma generate && npm run build && npx prisma migrate deploy
+npm install --include=dev && npx prisma generate && npm run build && npx prisma migrate deploy
 ```
 
 5. Start command:
