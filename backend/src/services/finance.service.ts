@@ -7,6 +7,14 @@ export function buildTransactionWhere(userId: string, filters: Record<string, un
 
   if (filters.type) where.type = filters.type as TransactionType;
   if (filters.categoryId) where.categoryId = String(filters.categoryId);
+  if (filters.search) {
+    and.push({
+      OR: [
+        { description: { contains: String(filters.search), mode: "insensitive" } },
+        { notes: { contains: String(filters.search), mode: "insensitive" } }
+      ]
+    });
+  }
 
   if (filters.month || filters.year) {
     const year = Number(filters.year ?? new Date().getFullYear());
@@ -33,6 +41,8 @@ export function buildTransactionWhere(userId: string, filters: Record<string, un
 }
 
 export async function getDashboard(userId: string) {
+  await ensureRecurringBills(userId);
+
   const now = new Date();
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
   const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
@@ -119,4 +129,56 @@ export async function getDashboard(userId: string) {
     investmentsList: investments,
     recentTransactions: transactions.slice(0, 8)
   };
+}
+
+export async function ensureRecurringBills(userId: string, referenceDate = new Date()) {
+  const monthStart = new Date(referenceDate.getFullYear(), referenceDate.getMonth(), 1);
+  const nextMonth = new Date(referenceDate.getFullYear(), referenceDate.getMonth() + 1, 1);
+
+  const recurringBills = await prisma.bill.findMany({
+    where: { userId, isRecurring: true, recurrenceDay: { not: null } },
+    orderBy: { createdAt: "asc" }
+  });
+
+  for (const bill of recurringBills) {
+    const recurrenceDay = bill.recurrenceDay ?? bill.dueDate.getDate();
+    const dueDate = new Date(referenceDate.getFullYear(), referenceDate.getMonth(), Math.min(recurrenceDay, 28));
+    const exists = await prisma.bill.findFirst({
+      where: {
+        userId,
+        title: bill.title,
+        isRecurring: true,
+        dueDate: { gte: monthStart, lt: nextMonth }
+      }
+    });
+
+    if (!exists) {
+      await prisma.bill.create({
+        data: {
+          title: bill.title,
+          amount: bill.amount,
+          dueDate,
+          status: "PENDING",
+          isRecurring: true,
+          recurrenceDay,
+          reminderAt: bill.reminderAt,
+          userId
+        }
+      });
+    }
+  }
+}
+
+export function toCsv(rows: Array<Record<string, string | number | null | undefined>>) {
+  if (!rows.length) return "";
+  const headers = Object.keys(rows[0]);
+  const escape = (value: string | number | null | undefined) => {
+    const text = value == null ? "" : String(value);
+    return /[",\n\r;]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+  };
+
+  return [
+    headers.join(","),
+    ...rows.map((row) => headers.map((header) => escape(row[header])).join(","))
+  ].join("\n");
 }

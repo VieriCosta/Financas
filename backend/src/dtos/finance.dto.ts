@@ -17,6 +17,8 @@ export const transactionDto = z.object({
   notes: z.string().optional()
 });
 
+export const updateTransactionDto = transactionDto.partial();
+
 export const billDto = z.object({
   title: z.string().min(2),
   amount: z.coerce.number().positive(),
@@ -39,6 +41,18 @@ export const investmentDto = z.object({
   monthlyYieldRate: z.coerce.number().default(0),
   cdiMonthlyRate: z.coerce.number().default(0),
   cdiPercent: z.coerce.number().default(100),
+  ticker: z.string().trim().min(1).optional(),
+  quantity: z.coerce.number().nonnegative().optional(),
+  averagePrice: z.coerce.number().nonnegative().optional(),
+  broker: z.string().trim().min(1).optional(),
+  institution: z.string().trim().min(1).optional(),
+  indexer: z.string().trim().min(1).optional(),
+  annualRate: z.coerce.number().optional(),
+  maturityDate: z.coerce.date().optional(),
+  liquidity: z.string().trim().min(1).optional(),
+  custodyLocation: z.string().trim().min(1).optional(),
+  walletAddress: z.string().trim().min(1).optional(),
+  notes: z.string().trim().min(1).optional(),
   referenceDate: z.coerce.date().optional()
 });
 
@@ -63,5 +77,8 @@ export const financeFiltersDto = z.object({
   categoryId: z.string().uuid().optional(),
   type: z.nativeEnum(TransactionType).optional(),
   from: z.coerce.date().optional(),
-  to: z.coerce.date().optional()
+  to: z.coerce.date().optional(),
+  page: z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce.number().int().min(1).max(100).default(20),
+  search: z.string().trim().min(1).optional()
 });

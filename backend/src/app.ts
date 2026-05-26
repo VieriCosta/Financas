@@ -44,9 +44,7 @@ function isAllowedOrigin(origin: string) {
     normalizedOrigin.includes("127.0.0.1") ||
     normalizedOrigin.includes("192.168.") ||
     normalizedOrigin.includes("172.") ||
-    normalizedOrigin.includes("10.") ||
-    normalizedOrigin.endsWith(".vercel.app") ||
-    normalizedOrigin.endsWith(".onrender.com")
+    normalizedOrigin.includes("10.")
   ) {
     return true;
   }

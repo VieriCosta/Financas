@@ -11,11 +11,14 @@ function resolveApiUrl() {
 }
 
 export const api = axios.create({
-  baseURL: resolveApiUrl()
+  baseURL: resolveApiUrl(),
+  headers: {
+    "Cache-Control": "no-cache"
+  }
 });
 
 api.interceptors.request.use((config) => {
-  const token = localStorage.getItem("finance.token");
+  const token = sessionStorage.getItem("finance.token");
   if (token) config.headers.Authorization = `Bearer ${token}`;
   return config;
 });

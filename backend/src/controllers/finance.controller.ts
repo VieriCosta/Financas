@@ -1,7 +1,7 @@
 import { Request, Response } from "express";
 import { prisma } from "../config/prisma.js";
-import { billDto, categoryDto, financeFiltersDto, goalDto, investmentDto, transactionDto, updateBillDto, updateGoalDto, updateInvestmentDto } from "../dtos/finance.dto.js";
-import { buildTransactionWhere, getDashboard } from "../services/finance.service.js";
+import { billDto, categoryDto, financeFiltersDto, goalDto, investmentDto, transactionDto, updateBillDto, updateGoalDto, updateInvestmentDto, updateTransactionDto } from "../dtos/finance.dto.js";
+import { buildTransactionWhere, ensureRecurringBills, getDashboard, toCsv } from "../services/finance.service.js";
 
 export async function dashboard(req: Request, res: Response) {
   return res.json(await getDashboard(req.userId));
@@ -18,18 +18,71 @@ export async function createCategory(req: Request, res: Response) {
 
 export async function listTransactions(req: Request, res: Response) {
   const filters = financeFiltersDto.parse(req.query);
-  return res.json(
-    await prisma.transaction.findMany({
+  const where = buildTransactionWhere(req.userId, filters);
+  const [items, total] = await Promise.all([
+    prisma.transaction.findMany({
+      where,
+      include: { category: true },
+      orderBy: { date: "desc" },
+      skip: (filters.page - 1) * filters.pageSize,
+      take: filters.pageSize
+    }),
+    prisma.transaction.count({ where })
+  ]);
+
+  return res.json({
+    items,
+    total,
+    page: filters.page,
+    pageSize: filters.pageSize,
+    totalPages: Math.ceil(total / filters.pageSize)
+  });
+}
+
+export async function exportTransactionsCsv(req: Request, res: Response) {
+  const filters = financeFiltersDto.parse(req.query);
+  const transactions = await prisma.transaction.findMany({
       where: buildTransactionWhere(req.userId, filters),
       include: { category: true },
       orderBy: { date: "desc" }
-    })
+  });
+
+  const csv = toCsv(
+    transactions.map((transaction) => ({
+      data: transaction.date.toISOString().slice(0, 10),
+      descricao: transaction.description,
+      tipo: transaction.type === "INCOME" ? "Receita" : "Despesa",
+      categoria: transaction.category?.name ?? "Sem categoria",
+      valor: Number(transaction.amount),
+      observacoes: transaction.notes
+    }))
   );
+
+  res.setHeader("Content-Type", "text/csv; charset=utf-8");
+  res.setHeader("Content-Disposition", "attachment; filename=movimentacoes.csv");
+  return res.send(csv);
 }
 
 export async function createTransaction(req: Request, res: Response) {
   const data = transactionDto.parse(req.body);
   return res.status(201).json(await prisma.transaction.create({ data: { ...data, userId: req.userId } }));
+}
+
+export async function updateTransaction(req: Request, res: Response) {
+  const data = updateTransactionDto.parse(req.body);
+  const transactionId = String(req.params.id);
+
+  await prisma.transaction.updateMany({
+    where: { id: transactionId, userId: req.userId },
+    data
+  });
+
+  const transaction = await prisma.transaction.findFirstOrThrow({
+    where: { id: transactionId, userId: req.userId },
+    include: { category: true }
+  });
+
+  return res.json(transaction);
 }
 
 export async function deleteTransaction(req: Request, res: Response) {
@@ -39,6 +92,7 @@ export async function deleteTransaction(req: Request, res: Response) {
 }
 
 export async function listBills(req: Request, res: Response) {
+  await ensureRecurringBills(req.userId);
   return res.json(await prisma.bill.findMany({ where: { userId: req.userId }, orderBy: { dueDate: "asc" } }));
 }
 

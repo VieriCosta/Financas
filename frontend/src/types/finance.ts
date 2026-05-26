@@ -22,6 +22,8 @@ export type Transaction = {
   amount: string | number;
   type: TransactionType;
   date: string;
+  notes?: string;
+  categoryId?: string;
   category?: Category;
 };
 
@@ -46,6 +48,18 @@ export type Investment = {
   monthlyYieldRate?: string | number;
   cdiMonthlyRate?: string | number;
   cdiPercent?: string | number;
+  ticker?: string;
+  quantity?: string | number;
+  averagePrice?: string | number;
+  broker?: string;
+  institution?: string;
+  indexer?: string;
+  annualRate?: string | number;
+  maturityDate?: string;
+  liquidity?: string;
+  custodyLocation?: string;
+  walletAddress?: string;
+  notes?: string;
   referenceDate?: string;
 };
 
@@ -70,4 +84,12 @@ export type DashboardData = {
   bills: Bill[];
   investmentsList: Investment[];
   recentTransactions: Transaction[];
+};
+
+export type PaginatedTransactions = {
+  items: Transaction[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
 };

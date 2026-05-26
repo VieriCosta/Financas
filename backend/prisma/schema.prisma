@@ -108,6 +108,18 @@ model Investment {
   monthlyYieldRate Decimal       @default(0) @db.Decimal(8, 2)
   cdiMonthlyRate   Decimal       @default(0) @db.Decimal(8, 2)
   cdiPercent       Decimal       @default(100) @db.Decimal(8, 2)
+  ticker          String?
+  quantity        Decimal?       @db.Decimal(18, 8)
+  averagePrice    Decimal?       @db.Decimal(18, 8)
+  broker          String?
+  institution     String?
+  indexer         String?
+  annualRate      Decimal?       @db.Decimal(8, 2)
+  maturityDate    DateTime?
+  liquidity       String?
+  custodyLocation String?
+  walletAddress   String?
+  notes           String?
   referenceDate   DateTime       @default(now())
   userId          String
   user            User           @relation(fields: [userId], references: [id], onDelete: Cascade)

@@ -10,6 +10,7 @@ import {
   deleteGoal,
   deleteInvestment,
   deleteTransaction,
+  exportTransactionsCsv,
   listBills,
   listCategories,
   listGoals,
@@ -17,7 +18,8 @@ import {
   listTransactions,
   updateBill,
   updateGoal,
-  updateInvestment
+  updateInvestment,
+  updateTransaction
 } from "../controllers/finance.controller.js";
 import { authMiddleware } from "../middlewares/auth.js";
 
@@ -38,7 +40,9 @@ financeRoutes.get("/dashboard", dashboard);
 financeRoutes.get("/categories", listCategories);
 financeRoutes.post("/categories", createCategory);
 financeRoutes.get("/transactions", listTransactions);
+financeRoutes.get("/transactions/export.csv", exportTransactionsCsv);
 financeRoutes.post("/transactions", createTransaction);
+financeRoutes.patch("/transactions/:id", updateTransaction);
 financeRoutes.delete("/transactions/:id", deleteTransaction);
 financeRoutes.get("/bills", listBills);
 financeRoutes.post("/bills", createBill);

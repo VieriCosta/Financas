@@ -1,7 +1,11 @@
 import { Router } from "express";
 import { changePassword, forgotPassword, login, register } from "../controllers/auth.controller.js";
+import { rateLimit } from "../middlewares/rateLimit.js";
 
 export const authRoutes = Router();
+
+const authLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 20 });
+const passwordResetLimiter = rateLimit({ windowMs: 60 * 60 * 1000, max: 5 });
 
 /**
  * @openapi
@@ -10,7 +14,7 @@ export const authRoutes = Router();
  *     tags: [Auth]
  *     summary: Cadastra um usuario
  */
-authRoutes.post("/register", register);
+authRoutes.post("/register", authLimiter, register);
 
 /**
  * @openapi
@@ -19,7 +23,7 @@ authRoutes.post("/register", register);
  *     tags: [Auth]
  *     summary: Autentica um usuario
  */
-authRoutes.post("/login", login);
+authRoutes.post("/login", authLimiter, login);
 
 /**
  * @openapi
@@ -28,7 +32,7 @@ authRoutes.post("/login", login);
  *     tags: [Auth]
  *     summary: Solicita link de redefinicao de senha
  */
-authRoutes.post("/forgot-password", forgotPassword);
+authRoutes.post("/forgot-password", passwordResetLimiter, forgotPassword);
 
 /**
  * @openapi
@@ -37,4 +41,4 @@ authRoutes.post("/forgot-password", forgotPassword);
  *     tags: [Auth]
  *     summary: Altera a senha usando token recebido por e-mail
  */
-authRoutes.post("/reset-password", changePassword);
+authRoutes.post("/reset-password", passwordResetLimiter, changePassword);

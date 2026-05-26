@@ -1,5 +1,4 @@
 import { FormEvent, InputHTMLAttributes, ReactNode, SelectHTMLAttributes, useEffect, useMemo, useState } from "react";
-import jsPDF from "jspdf";
 import {
   Area,
   AreaChart,
@@ -22,6 +21,7 @@ import {
   CircleAlert,
   BrainCircuit,
   Download,
+  Edit3,
   LayoutDashboard,
   LogOut,
   Moon,
@@ -29,19 +29,25 @@ import {
   Plus,
   ReceiptText,
   Search,
+  Save,
   Sun,
   Target,
   Trash2,
   TrendingUp,
-  WalletCards
+  WalletCards,
+  X
 } from "lucide-react";
 import { api } from "../api/client";
 import { useAuth } from "../context/AuthContext";
-import { Bill, Category, DashboardData, Goal, Investment, Transaction } from "../types/finance";
+import { Bill, Category, DashboardData, Goal, Investment, PaginatedTransactions, Transaction } from "../types/finance";
 import { dateLabel, money } from "../utils/format";
 
 type ViewKey = "overview" | "transactions" | "agenda" | "investments" | "goals" | "ai";
 type Toast = { type: "success" | "error"; message: string } | null;
+type RefreshedData = {
+  dashboard: DashboardData;
+  transactions: PaginatedTransactions;
+};
 
 const emptyDashboard: DashboardData = {
   cards: { balance: 0, monthIncome: 0, monthExpense: 0, investments: 0 },
@@ -51,6 +57,14 @@ const emptyDashboard: DashboardData = {
   bills: [],
   investmentsList: [],
   recentTransactions: []
+};
+
+const emptyTransactions: PaginatedTransactions = {
+  items: [],
+  total: 0,
+  page: 1,
+  pageSize: 10,
+  totalPages: 1
 };
 
 const menuItems: Array<{ key: ViewKey; label: string; icon: ReactNode }> = [
@@ -78,37 +92,105 @@ export function DashboardPage() {
   const [activeView, setActiveView] = useState<ViewKey>("overview");
   const [dark, setDark] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [filters, setFilters] = useState({ month: String(new Date().getMonth() + 1), type: "" });
+  const [filters, setFilters] = useState({ month: String(new Date().getMonth() + 1), type: "", search: "" });
+  const [transactionsPage, setTransactionsPage] = useState(emptyTransactions);
+  const [saving, setSaving] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [toast, setToast] = useState<Toast>(null);
 
   useEffect(() => {
     document.documentElement.classList.toggle("dark", dark);
   }, [dark]);
 
-  async function loadData() {
+  async function loadData(page = transactionsPage.page || 1): Promise<RefreshedData> {
+    setRefreshing(true);
     const requestId = Date.now();
-    const [dashboardResponse, categoriesResponse] = await Promise.all([
-      api.get("/dashboard", { params: { _t: requestId } }),
-      api.get("/categories", { params: { _t: requestId } })
-    ]);
-    setDashboard(dashboardResponse.data);
-    setCategories(categoriesResponse.data);
-    setLoading(false);
+    try {
+      const [dashboardResponse, categoriesResponse, transactionsResponse, billsResponse, goalsResponse, investmentsResponse] = await Promise.allSettled([
+        api.get("/dashboard", { params: { _t: requestId } }),
+        api.get("/categories", { params: { _t: requestId } }),
+        api.get("/transactions", { params: transactionParams(filters, page, requestId) }),
+        api.get("/bills", { params: { _t: requestId } }),
+        api.get("/goals", { params: { _t: requestId } }),
+        api.get("/investments", { params: { _t: requestId } })
+      ]);
+
+      const nextDashboard: DashboardData = {
+        ...(dashboardResponse.status === "fulfilled" ? dashboardResponse.value.data : dashboard),
+        bills: billsResponse.status === "fulfilled" ? billsResponse.value.data : dashboard.bills,
+        goals: goalsResponse.status === "fulfilled" ? goalsResponse.value.data : dashboard.goals,
+        investmentsList: investmentsResponse.status === "fulfilled" ? investmentsResponse.value.data : dashboard.investmentsList
+      };
+
+      setDashboard(nextDashboard);
+
+      if (categoriesResponse.status === "fulfilled") {
+        setCategories(categoriesResponse.value.data);
+      }
+
+      const nextTransactions = transactionsResponse.status === "fulfilled" ? transactionsResponse.value.data : transactionsPage;
+
+      if (transactionsResponse.status === "fulfilled") {
+        setTransactionsPage(nextTransactions);
+      }
+
+      return { dashboard: nextDashboard, transactions: nextTransactions };
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }
+
+  async function refreshAfterMutation(): Promise<RefreshedData | null> {
+    try {
+      return await loadData(transactionsPage.page || 1);
+    } catch {
+      // A gravacao ja terminou; falha de refresh nao deve virar erro de salvamento.
+      return null;
+    }
+  }
+
+  async function loadTransactions(page = transactionsPage.page) {
+    const response = await api.get("/transactions", { params: transactionParams(filters, page, Date.now()) });
+    setTransactionsPage(response.data);
   }
 
   useEffect(() => {
-    loadData();
+    loadData(1);
   }, []);
+
+  useEffect(() => {
+    function refreshOnFocus() {
+      if (document.visibilityState === "visible") {
+        loadData(transactionsPage.page || 1);
+      }
+    }
+
+    window.addEventListener("focus", refreshOnFocus);
+    document.addEventListener("visibilitychange", refreshOnFocus);
+
+    return () => {
+      window.removeEventListener("focus", refreshOnFocus);
+      document.removeEventListener("visibilitychange", refreshOnFocus);
+    };
+  }, [filters, transactionsPage.page]);
 
   const expenseCategories = useMemo(() => categories.filter((category) => category.type !== "INCOME"), [categories]);
   const incomeCategories = useMemo(() => categories.filter((category) => category.type !== "EXPENSE"), [categories]);
-  const filteredTransactions = useMemo(() => {
-    return dashboard.recentTransactions.filter((item) => {
-      const byType = filters.type ? item.type === filters.type : true;
-      const byMonth = String(new Date(item.date).getMonth() + 1) === filters.month;
-      return byType && byMonth;
-    });
-  }, [dashboard.recentTransactions, filters]);
+
+  useEffect(() => {
+    if (!loading) loadTransactions(1);
+  }, [filters]);
+
+  useEffect(() => {
+    const interval = window.setInterval(() => {
+      if (!saving && !refreshing && document.visibilityState === "visible") {
+        loadData(transactionsPage.page || 1);
+      }
+    }, 10000);
+
+    return () => window.clearInterval(interval);
+  }, [filters, refreshing, saving, transactionsPage.page]);
 
   function notify(type: "success" | "error", message: string) {
     setToast({ type, message });
@@ -118,7 +200,9 @@ export function DashboardPage() {
   async function submitTransaction(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
+    const previousTotal = transactionsPage.total;
     try {
+      setSaving(true);
       await api.post("/transactions", {
         description: form.get("description"),
         amount: Number(form.get("amount")),
@@ -127,40 +211,57 @@ export function DashboardPage() {
         categoryId: form.get("categoryId") || undefined
       });
       event.currentTarget.reset();
-      await loadData();
+      await refreshAfterMutation();
       notify("success", "Movimentacao registrada com sucesso.");
     } catch {
-      notify("error", "Nao foi possivel registrar a movimentacao.");
+      const refreshed = await refreshAfterMutation();
+      notify(refreshed && refreshed.transactions.total > previousTotal ? "success" : "error", refreshed && refreshed.transactions.total > previousTotal ? "Movimentacao registrada com sucesso." : "Nao foi possivel registrar a movimentacao.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function updateTransaction(transactionId: string, payload: Record<string, number | string | undefined>) {
+    try {
+      setSaving(true);
+      await api.patch(`/transactions/${transactionId}`, payload);
+      await refreshAfterMutation();
+      notify("success", "Movimentacao atualizada.");
+    } catch {
+      notify("error", "Nao foi possivel atualizar a movimentacao.");
+    } finally {
+      setSaving(false);
     }
   }
 
   async function submitInvestment(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
+    const previousCount = dashboard.investmentsList.length;
     try {
+      setSaving(true);
       await api.post("/investments", {
         name: form.get("name"),
         type: form.get("type"),
-        currentValue: Number(form.get("currentValue")),
-        investedAmount: Number(form.get("investedAmount")),
-        contribution: Number(form.get("contribution") || 0),
-        profitability: Number(form.get("profitability") || 0),
-        monthlyYieldRate: Number(form.get("monthlyYieldRate") || 0),
-        cdiMonthlyRate: Number(form.get("cdiMonthlyRate") || 0),
-        cdiPercent: Number(form.get("cdiPercent") || 100)
+        ...readInvestmentPayload(form)
       });
       event.currentTarget.reset();
-      await loadData();
+      await refreshAfterMutation();
       notify("success", "Investimento registrado com sucesso.");
     } catch {
-      notify("error", "Nao foi possivel registrar o investimento.");
+      const refreshed = await refreshAfterMutation();
+      notify(refreshed && refreshed.dashboard.investmentsList.length > previousCount ? "success" : "error", refreshed && refreshed.dashboard.investmentsList.length > previousCount ? "Investimento registrado com sucesso." : "Nao foi possivel registrar o investimento.");
+    } finally {
+      setSaving(false);
     }
   }
 
   async function submitGoal(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
+    const previousCount = dashboard.goals.length;
     try {
+      setSaving(true);
       await api.post("/goals", {
         title: form.get("title"),
         targetAmount: Number(form.get("targetAmount")),
@@ -168,10 +269,13 @@ export function DashboardPage() {
         deadline: form.get("deadline") || undefined
       });
       event.currentTarget.reset();
-      await loadData();
+      await refreshAfterMutation();
       notify("success", "Meta criada com sucesso.");
     } catch {
-      notify("error", "Nao foi possivel criar a meta.");
+      const refreshed = await refreshAfterMutation();
+      notify(refreshed && refreshed.dashboard.goals.length > previousCount ? "success" : "error", refreshed && refreshed.dashboard.goals.length > previousCount ? "Meta criada com sucesso." : "Nao foi possivel criar a meta.");
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -180,8 +284,10 @@ export function DashboardPage() {
     const form = new FormData(event.currentTarget);
     const isRecurring = form.get("isRecurring") === "on";
     const dueDate = String(form.get("dueDate"));
+    const previousCount = dashboard.bills.length;
 
     try {
+      setSaving(true);
       await api.post("/bills", {
         title: form.get("title"),
         amount: Number(form.get("amount")),
@@ -191,41 +297,53 @@ export function DashboardPage() {
         recurrenceDay: isRecurring ? new Date(`${dueDate}T00:00:00`).getDate() : undefined
       });
       event.currentTarget.reset();
-      await loadData();
+      await refreshAfterMutation();
       notify("success", "Conta salva na agenda.");
     } catch {
-      notify("error", "Nao foi possivel salvar a conta.");
+      const refreshed = await refreshAfterMutation();
+      notify(refreshed && refreshed.dashboard.bills.length > previousCount ? "success" : "error", refreshed && refreshed.dashboard.bills.length > previousCount ? "Conta salva na agenda." : "Nao foi possivel salvar a conta.");
+    } finally {
+      setSaving(false);
     }
   }
 
   async function updateBillStatus(bill: Bill) {
     const nextStatus = bill.status === "PAID" ? "PENDING" : "PAID";
     try {
+      setSaving(true);
       await api.patch(`/bills/${bill.id}`, { status: nextStatus });
-      await loadData();
+      await refreshAfterMutation();
       notify("success", nextStatus === "PAID" ? "Conta marcada como paga e somada nas despesas." : "Conta voltou para pendente.");
     } catch {
       notify("error", "Nao foi possivel atualizar a conta.");
+    } finally {
+      setSaving(false);
     }
   }
 
   async function addGoalAmount(goalId: string, amount: number) {
     try {
+      setSaving(true);
       await api.patch(`/goals/${goalId}`, { addAmount: amount });
-      await loadData();
+      await refreshAfterMutation();
       notify("success", "Valor adicionado a meta.");
     } catch {
       notify("error", "Nao foi possivel atualizar a meta.");
+    } finally {
+      setSaving(false);
     }
   }
 
-  async function updateInvestment(investmentId: string, payload: Record<string, number | string>) {
+  async function updateInvestment(investmentId: string, payload: Record<string, number | string | undefined>) {
     try {
+      setSaving(true);
       await api.patch(`/investments/${investmentId}`, payload);
-      await loadData();
+      await refreshAfterMutation();
       notify("success", payload.addContribution ? "Aporte adicionado ao investimento." : "Investimento atualizado.");
     } catch {
       notify("error", "Nao foi possivel atualizar o investimento.");
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -235,15 +353,36 @@ export function DashboardPage() {
     }
 
     try {
+      setSaving(true);
       await api.delete(`/${resource}/${id}`);
-      await loadData();
+      await refreshAfterMutation();
       notify("success", successMessage);
     } catch {
       notify("error", "Nao foi possivel remover este item.");
+    } finally {
+      setSaving(false);
     }
   }
 
-  function exportPdf() {
+  async function exportCsv() {
+    try {
+      const response = await api.get("/transactions/export.csv", {
+        params: transactionParams(filters, 1, Date.now()),
+        responseType: "blob"
+      });
+      const url = URL.createObjectURL(response.data);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "movimentacoes.csv";
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      notify("error", "Nao foi possivel exportar o CSV.");
+    }
+  }
+
+  async function exportPdf() {
+    const { default: jsPDF } = await import("jspdf");
     const doc = new jsPDF();
     doc.setFontSize(18);
     doc.text("Relatorio Financeiro", 14, 20);
@@ -298,7 +437,10 @@ export function DashboardPage() {
             <div>
               <p className="text-sm text-slate-500 dark:text-slate-400">Ola, {user?.name}</p>
               <h1 className="text-2xl font-semibold">{viewTitles[activeView].title}</h1>
-              <p className="hidden text-sm text-slate-500 dark:text-slate-400 sm:block">{viewTitles[activeView].subtitle}</p>
+              <p className="hidden text-sm text-slate-500 dark:text-slate-400 sm:block">
+                {viewTitles[activeView].subtitle}
+                {refreshing && <span className="ml-2 text-blue-600 dark:text-blue-300">Atualizando...</span>}
+              </p>
             </div>
             <div className="flex items-center gap-2">
               <button onClick={exportPdf} className="grid h-10 w-10 place-items-center rounded-lg border border-slate-200 bg-white text-slate-700 shadow-sm dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200" title="Exportar PDF">
@@ -335,14 +477,19 @@ export function DashboardPage() {
               categories={[...incomeCategories, ...expenseCategories]}
               filters={filters}
               setFilters={setFilters}
-              transactions={filteredTransactions}
+              transactions={transactionsPage.items}
+              pagination={transactionsPage}
+              saving={saving}
               onSubmit={submitTransaction}
+              onUpdate={updateTransaction}
               onRemove={(transaction) => removeResource("transactions", transaction.id, "Movimentacao removida.")}
+              onPageChange={loadTransactions}
+              onExportCsv={exportCsv}
             />
           )}
-          {activeView === "agenda" && <AgendaView bills={dashboard.bills} onSubmit={submitBill} onBillStatusChange={updateBillStatus} onRemove={(bill) => removeResource("bills", bill.id, "Conta removida da agenda.")} />}
-          {activeView === "investments" && <InvestmentsView investments={dashboard.investmentsList} monthlySeries={dashboard.monthlySeries} onSubmit={submitInvestment} onUpdate={updateInvestment} onRemove={(investment) => removeResource("investments", investment.id, "Investimento removido.")} />}
-          {activeView === "goals" && <GoalsView goals={dashboard.goals} onSubmit={submitGoal} onAddAmount={addGoalAmount} onRemove={(goal) => removeResource("goals", goal.id, "Meta removida.")} />}
+          {activeView === "agenda" && <AgendaView bills={dashboard.bills} saving={saving} onSubmit={submitBill} onBillStatusChange={updateBillStatus} onRemove={(bill) => removeResource("bills", bill.id, "Conta removida da agenda.")} />}
+          {activeView === "investments" && <InvestmentsView investments={dashboard.investmentsList} monthlySeries={dashboard.monthlySeries} saving={saving} onSubmit={submitInvestment} onUpdate={updateInvestment} onRemove={(investment) => removeResource("investments", investment.id, "Investimento removido.")} />}
+          {activeView === "goals" && <GoalsView goals={dashboard.goals} saving={saving} onSubmit={submitGoal} onAddAmount={addGoalAmount} onRemove={(goal) => removeResource("goals", goal.id, "Meta removida.")} />}
           {activeView === "ai" && <AiAdviceView dashboard={dashboard} />}
         </div>
       </section>
@@ -417,28 +564,39 @@ function TransactionsView({
   filters,
   setFilters,
   transactions,
+  pagination,
+  saving,
   onSubmit,
-  onRemove
+  onUpdate,
+  onRemove,
+  onPageChange,
+  onExportCsv
 }: {
   categories: Category[];
-  filters: { month: string; type: string };
-  setFilters: (filters: { month: string; type: string }) => void;
+  filters: { month: string; type: string; search: string };
+  setFilters: (filters: { month: string; type: string; search: string }) => void;
   transactions: Transaction[];
+  pagination: PaginatedTransactions;
+  saving: boolean;
   onSubmit: (event: FormEvent<HTMLFormElement>) => Promise<void>;
+  onUpdate: (transactionId: string, payload: Record<string, number | string | undefined>) => Promise<void>;
   onRemove: (transaction: Transaction) => void;
+  onPageChange: (page: number) => Promise<void>;
+  onExportCsv: () => Promise<void>;
 }) {
+  const [newTransactionType, setNewTransactionType] = useState<Transaction["type"]>("EXPENSE");
+  const newTransactionCategories = categories.filter((category) => categoryMatchesTransactionType(category, newTransactionType));
+
   return (
     <div className="grid gap-5 xl:grid-cols-[0.85fr_1.15fr]">
       <Panel title="Nova movimentacao">
         <form onSubmit={onSubmit} className="grid gap-3 sm:grid-cols-2">
           <Input name="description" placeholder="Descricao" />
           <Input name="amount" placeholder="Valor" type="number" step="0.01" />
-          <Select name="type" options={[["INCOME", "Receita"], ["EXPENSE", "Despesa"]]} />
-          <Select name="categoryId" options={[["", "Categoria"], ...categories.map((item) => [item.id, item.name] as [string, string])]} />
+          <Select name="type" value={newTransactionType} onChange={(value) => setNewTransactionType(value as Transaction["type"])} options={[["INCOME", "Receita"], ["EXPENSE", "Despesa"]]} />
+          <Select name="categoryId" options={[["", newTransactionType === "INCOME" ? "Categoria de receita" : "Categoria de despesa"], ...newTransactionCategories.map((item) => [item.id, item.name] as [string, string])]} />
           <Input name="date" type="date" />
-          <button className="flex h-11 items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 font-semibold text-white transition hover:bg-blue-700">
-            <Plus size={18} /> Adicionar
-          </button>
+          <SubmitButton disabled={saving}><Plus size={18} /> Adicionar</SubmitButton>
         </form>
       </Panel>
 
@@ -451,8 +609,13 @@ function TransactionsView({
             </select>
           </label>
           <Select name="filterType" value={filters.type} onChange={(value) => setFilters({ ...filters, type: value })} options={[["", "Todos"], ["INCOME", "Receitas"], ["EXPENSE", "Despesas"]]} />
+          <input value={filters.search} onChange={(event) => setFilters({ ...filters, search: event.target.value })} placeholder="Buscar" className="h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 dark:border-slate-800 dark:bg-slate-900" />
+          <button type="button" onClick={onExportCsv} className="flex h-10 items-center gap-2 rounded-lg border border-slate-200 px-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 dark:border-slate-800 dark:text-slate-200 dark:hover:bg-slate-800">
+            <Download size={16} /> CSV
+          </button>
         </div>
-        <TransactionList transactions={transactions} onRemove={onRemove} />
+        <TransactionList transactions={transactions} categories={categories} onUpdate={onUpdate} onRemove={onRemove} />
+        <Pagination pagination={pagination} onPageChange={onPageChange} />
       </Panel>
     </div>
   );
@@ -460,11 +623,13 @@ function TransactionsView({
 
 function AgendaView({
   bills,
+  saving,
   onSubmit,
   onBillStatusChange,
   onRemove
 }: {
   bills: Bill[];
+  saving: boolean;
   onSubmit: (event: FormEvent<HTMLFormElement>) => Promise<void>;
   onBillStatusChange: (bill: Bill) => Promise<void>;
   onRemove: (bill: Bill) => void;
@@ -485,7 +650,7 @@ function AgendaView({
             <input name="isRecurring" type="checkbox" className="h-4 w-4 accent-blue-600" />
             Repetir todo mes nesta data
           </label>
-          <button className="h-11 rounded-lg bg-blue-600 font-semibold text-white transition hover:bg-blue-700">Salvar na agenda</button>
+          <SubmitButton disabled={saving}>Salvar na agenda</SubmitButton>
         </form>
       </Panel>
 
@@ -509,32 +674,29 @@ function AgendaView({
 function InvestmentsView({
   investments,
   monthlySeries,
+  saving,
   onSubmit,
   onUpdate,
   onRemove
 }: {
   investments: Investment[];
   monthlySeries: DashboardData["monthlySeries"];
+  saving: boolean;
   onSubmit: (event: FormEvent<HTMLFormElement>) => Promise<void>;
-  onUpdate: (investmentId: string, payload: Record<string, number | string>) => Promise<void>;
+  onUpdate: (investmentId: string, payload: Record<string, number | string | undefined>) => Promise<void>;
   onRemove: (investment: Investment) => void;
 }) {
   const projectedReturn = investments.reduce((sum, investment) => sum + estimateMonthlyReturn(investment), 0);
+  const [selectedType, setSelectedType] = useState<Investment["type"]>("FIXED_INCOME");
 
   return (
     <div className="grid gap-5 xl:grid-cols-[0.85fr_1.15fr]">
       <Panel title="Novo investimento ou aporte">
         <form onSubmit={onSubmit} className="grid gap-3">
-          <Input name="name" placeholder="Ativo" />
-          <Select name="type" options={[["STOCK", "Acoes"], ["CRYPTO", "Criptomoedas"], ["FIXED_INCOME", "Renda fixa"], ["EMERGENCY_RESERVE", "Reserva"], ["OTHER", "Outro"]]} />
-          <Input name="currentValue" placeholder="Valor atual" type="number" step="0.01" />
-          <Input name="investedAmount" placeholder="Valor investido" type="number" step="0.01" />
-          <Input name="contribution" placeholder="Aporte" type="number" step="0.01" />
-          <Input name="profitability" placeholder="Rentabilidade %" type="number" step="0.01" />
-          <Input name="monthlyYieldRate" placeholder="Rendimento mensal %" type="number" step="0.01" />
-          <Input name="cdiMonthlyRate" placeholder="CDI mensal base %" type="number" step="0.01" />
-          <Input name="cdiPercent" placeholder="% do CDI" type="number" step="0.01" defaultValue={100} />
-          <button className="h-11 rounded-lg bg-blue-600 font-semibold text-white transition hover:bg-blue-700">Registrar investimento</button>
+          <Input name="name" placeholder={investmentNamePlaceholder(selectedType)} />
+          <Select name="type" value={selectedType} onChange={(value) => setSelectedType(value as Investment["type"])} options={investmentTypeOptions} />
+          <InvestmentFields type={selectedType} />
+          <SubmitButton disabled={saving}>Registrar investimento</SubmitButton>
         </form>
       </Panel>
 
@@ -577,7 +739,7 @@ function InvestmentCard({
   onRemove
 }: {
   investment: Investment;
-  onUpdate: (investmentId: string, payload: Record<string, number | string>) => Promise<void>;
+  onUpdate: (investmentId: string, payload: Record<string, number | string | undefined>) => Promise<void>;
   onRemove: (investment: Investment) => void;
 }) {
   const effectiveMonthlyRate = getEffectiveMonthlyRate(investment);
@@ -594,11 +756,14 @@ function InvestmentCard({
           <p className="mt-1 text-sm text-slate-500">
             Rende aprox. {effectiveMonthlyRate.toFixed(2)}% ao mes ({money(monthlyReturn)})
           </p>
+          <InvestmentDetails investment={investment} />
         </div>
         <div className="flex items-center gap-2">
-          <span className="rounded-full bg-blue-50 px-3 py-1 text-sm font-semibold text-blue-700 dark:bg-blue-500/10 dark:text-blue-300">
-            CDI {Number(investment.cdiPercent ?? 100).toFixed(0)}%
-          </span>
+          {investment.cdiPercent && (
+            <span className="rounded-full bg-blue-50 px-3 py-1 text-sm font-semibold text-blue-700 dark:bg-blue-500/10 dark:text-blue-300">
+              CDI {Number(investment.cdiPercent ?? 100).toFixed(0)}%
+            </span>
+          )}
           <IconButton label="Remover investimento" onClick={() => onRemove(investment)} />
         </div>
       </div>
@@ -608,20 +773,10 @@ function InvestmentCard({
         onSubmit={(event) => {
           event.preventDefault();
           const form = new FormData(event.currentTarget);
-          onUpdate(investment.id, {
-            currentValue: Number(form.get("currentValue")),
-            investedAmount: Number(form.get("investedAmount")),
-            monthlyYieldRate: Number(form.get("monthlyYieldRate") || 0),
-            cdiMonthlyRate: Number(form.get("cdiMonthlyRate") || 0),
-            cdiPercent: Number(form.get("cdiPercent") || 100)
-          });
+          onUpdate(investment.id, readInvestmentPayload(form));
         }}
       >
-        <Input name="currentValue" placeholder="Valor atual" type="number" step="0.01" defaultValue={Number(investment.currentValue)} />
-        <Input name="investedAmount" placeholder="Investido" type="number" step="0.01" defaultValue={Number(investment.investedAmount)} />
-        <Input name="monthlyYieldRate" placeholder="Rend. mensal %" type="number" step="0.01" defaultValue={Number(investment.monthlyYieldRate ?? 0)} />
-        <Input name="cdiMonthlyRate" placeholder="CDI mensal %" type="number" step="0.01" defaultValue={Number(investment.cdiMonthlyRate ?? 0)} />
-        <Input name="cdiPercent" placeholder="% do CDI" type="number" step="0.01" defaultValue={Number(investment.cdiPercent ?? 100)} />
+        <InvestmentFields type={investment.type} investment={investment} compact />
         <button className="h-11 rounded-lg border border-slate-200 px-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 dark:border-slate-800 dark:text-slate-200 dark:hover:bg-slate-800">Salvar edicao</button>
       </form>
 
@@ -643,13 +798,149 @@ function InvestmentCard({
   );
 }
 
+const investmentTypeOptions: Array<[Investment["type"], string]> = [
+  ["FIXED_INCOME", "Renda fixa"],
+  ["EMERGENCY_RESERVE", "Reserva"],
+  ["STOCK", "Acoes"],
+  ["CRYPTO", "Criptomoedas"],
+  ["OTHER", "Outro"]
+];
+
+function InvestmentFields({ type, investment, compact = false }: { type: Investment["type"]; investment?: Investment; compact?: boolean }) {
+  const gridClass = compact ? "contents" : "grid gap-3";
+
+  return (
+    <div className={gridClass}>
+      <Input name="currentValue" placeholder="Valor atual" type="number" step="0.01" defaultValue={numberDefault(investment?.currentValue)} />
+      <Input name="investedAmount" placeholder="Valor investido" type="number" step="0.01" defaultValue={numberDefault(investment?.investedAmount)} />
+      <Input name="contribution" placeholder="Aporte do mes" type="number" step="0.01" required={false} defaultValue={numberDefault(investment?.contribution)} />
+
+      {(type === "STOCK" || type === "CRYPTO") && (
+        <>
+          <Input name="ticker" placeholder={type === "STOCK" ? "Ticker (ex: PETR4)" : "Simbolo (ex: BTC)"} defaultValue={investment?.ticker ?? ""} />
+          <Input name="quantity" placeholder="Quantidade" type="number" step="0.00000001" defaultValue={numberDefault(investment?.quantity)} />
+          <Input name="averagePrice" placeholder="Preco medio" type="number" step="0.00000001" required={false} defaultValue={numberDefault(investment?.averagePrice)} />
+        </>
+      )}
+
+      {type === "STOCK" && <Input name="broker" placeholder="Corretora" required={false} defaultValue={investment?.broker ?? ""} />}
+
+      {type === "CRYPTO" && (
+        <>
+          <Input name="custodyLocation" placeholder="Custodia (corretora ou carteira)" required={false} defaultValue={investment?.custodyLocation ?? ""} />
+          <Input name="walletAddress" placeholder="Endereco da carteira" required={false} defaultValue={investment?.walletAddress ?? ""} />
+        </>
+      )}
+
+      {(type === "FIXED_INCOME" || type === "EMERGENCY_RESERVE") && (
+        <>
+          <Input name="institution" placeholder="Instituicao" defaultValue={investment?.institution ?? ""} />
+          <Select name="indexer" defaultValue={investment?.indexer ?? (type === "FIXED_INCOME" ? "CDI" : "CDI")} options={[["CDI", "CDI"], ["IPCA", "IPCA"], ["PREFIXED", "Prefixado"], ["SELIC", "Selic"], ["SAVINGS", "Poupanca"]]} />
+          <Input name="cdiPercent" placeholder="% do CDI" type="number" step="0.01" required={false} defaultValue={numberDefault(investment?.cdiPercent ?? 100)} />
+          <Input name="annualRate" placeholder="Taxa anual %" type="number" step="0.01" required={false} defaultValue={numberDefault(investment?.annualRate)} />
+          <Input name="monthlyYieldRate" placeholder="Rendimento mensal %" type="number" step="0.01" required={false} defaultValue={numberDefault(investment?.monthlyYieldRate)} />
+          <Input name="cdiMonthlyRate" placeholder="CDI mensal base %" type="number" step="0.01" required={false} defaultValue={numberDefault(investment?.cdiMonthlyRate)} />
+          <Input name="liquidity" placeholder={type === "EMERGENCY_RESERVE" ? "Liquidez (ex: D+0)" : "Liquidez (ex: vencimento ou D+1)"} required={false} defaultValue={investment?.liquidity ?? ""} />
+        </>
+      )}
+
+      {type === "FIXED_INCOME" && <Input name="maturityDate" type="date" required={false} defaultValue={investment?.maturityDate ? String(investment.maturityDate).slice(0, 10) : ""} />}
+
+      {type === "OTHER" && (
+        <>
+          <Input name="institution" placeholder="Instituicao ou local" required={false} defaultValue={investment?.institution ?? ""} />
+          <Input name="notes" placeholder="Descricao do ativo" required={false} defaultValue={investment?.notes ?? ""} />
+          <Input name="monthlyYieldRate" placeholder="Rendimento mensal %" type="number" step="0.01" required={false} defaultValue={numberDefault(investment?.monthlyYieldRate)} />
+        </>
+      )}
+    </div>
+  );
+}
+
+function InvestmentDetails({ investment }: { investment: Investment }) {
+  const details = [
+    investment.ticker ? `Ticker: ${investment.ticker}` : null,
+    investment.quantity ? `Qtd: ${Number(investment.quantity).toLocaleString("pt-BR")}` : null,
+    investment.averagePrice ? `Preco medio: ${money(investment.averagePrice)}` : null,
+    investment.broker ? `Corretora: ${investment.broker}` : null,
+    investment.institution ? `Instituicao: ${investment.institution}` : null,
+    investment.indexer ? `Indexador: ${investment.indexer}` : null,
+    investment.annualRate ? `Taxa anual: ${Number(investment.annualRate).toFixed(2)}%` : null,
+    investment.maturityDate ? `Vence em: ${dateLabel(investment.maturityDate)}` : null,
+    investment.liquidity ? `Liquidez: ${investment.liquidity}` : null,
+    investment.custodyLocation ? `Custodia: ${investment.custodyLocation}` : null
+  ].filter(Boolean);
+
+  if (!details.length) return null;
+
+  return <p className="mt-2 text-xs leading-5 text-slate-500">{details.join(" - ")}</p>;
+}
+
+function readInvestmentPayload(form: FormData) {
+  return {
+    currentValue: numberFromForm(form, "currentValue"),
+    investedAmount: numberFromForm(form, "investedAmount"),
+    contribution: numberFromForm(form, "contribution", 0),
+    profitability: numberFromForm(form, "profitability", 0),
+    monthlyYieldRate: numberFromForm(form, "monthlyYieldRate", 0),
+    cdiMonthlyRate: numberFromForm(form, "cdiMonthlyRate", 0),
+    cdiPercent: numberFromForm(form, "cdiPercent", 100),
+    ticker: textFromForm(form, "ticker"),
+    quantity: optionalNumberFromForm(form, "quantity"),
+    averagePrice: optionalNumberFromForm(form, "averagePrice"),
+    broker: textFromForm(form, "broker"),
+    institution: textFromForm(form, "institution"),
+    indexer: textFromForm(form, "indexer"),
+    annualRate: optionalNumberFromForm(form, "annualRate"),
+    maturityDate: textFromForm(form, "maturityDate"),
+    liquidity: textFromForm(form, "liquidity"),
+    custodyLocation: textFromForm(form, "custodyLocation"),
+    walletAddress: textFromForm(form, "walletAddress"),
+    notes: textFromForm(form, "notes")
+  };
+}
+
+function investmentNamePlaceholder(type: Investment["type"]) {
+  const placeholders: Record<Investment["type"], string> = {
+    STOCK: "Nome da acao ou FII",
+    CRYPTO: "Nome da criptomoeda",
+    FIXED_INCOME: "Nome do titulo",
+    EMERGENCY_RESERVE: "Nome da reserva",
+    OTHER: "Nome do investimento"
+  };
+
+  return placeholders[type];
+}
+
+function numberFromForm(form: FormData, name: string, fallback?: number) {
+  const value = form.get(name);
+  if (value === null || value === "") return fallback ?? 0;
+  return Number(value);
+}
+
+function optionalNumberFromForm(form: FormData, name: string) {
+  const value = form.get(name);
+  return value === null || value === "" ? undefined : Number(value);
+}
+
+function textFromForm(form: FormData, name: string) {
+  const value = String(form.get(name) ?? "").trim();
+  return value || undefined;
+}
+
+function numberDefault(value: string | number | undefined) {
+  return value === undefined || value === null ? "" : Number(value);
+}
+
 function GoalsView({
   goals,
+  saving,
   onSubmit,
   onAddAmount,
   onRemove
 }: {
   goals: Goal[];
+  saving: boolean;
   onSubmit: (event: FormEvent<HTMLFormElement>) => Promise<void>;
   onAddAmount: (goalId: string, amount: number) => Promise<void>;
   onRemove: (goal: Goal) => void;
@@ -666,7 +957,7 @@ function GoalsView({
           <Input name="targetAmount" placeholder="Objetivo" type="number" step="0.01" />
           <Input name="currentAmount" placeholder="Valor atual" type="number" step="0.01" />
           <Input name="deadline" type="date" />
-          <button className="h-11 rounded-lg bg-blue-600 font-semibold text-white transition hover:bg-blue-700">Criar meta</button>
+          <SubmitButton disabled={saving}>Criar meta</SubmitButton>
         </form>
       </Panel>
 
@@ -740,27 +1031,85 @@ function Panel({ title, children }: { title: string; children: ReactNode }) {
   );
 }
 
-function TransactionList({ transactions, onRemove }: { transactions: Transaction[]; onRemove?: (transaction: Transaction) => void }) {
+function TransactionList({
+  transactions,
+  categories,
+  onUpdate,
+  onRemove
+}: {
+  transactions: Transaction[];
+  categories?: Category[];
+  onUpdate?: (transactionId: string, payload: Record<string, number | string | undefined>) => Promise<void>;
+  onRemove?: (transaction: Transaction) => void;
+}) {
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingType, setEditingType] = useState<Transaction["type"]>("EXPENSE");
+
   if (!transactions.length) {
     return <EmptyState text="Nenhuma movimentacao encontrada para este filtro." />;
   }
 
   return (
     <div className="space-y-3">
-      {transactions.map((item) => (
-        <div key={item.id} className="flex items-center justify-between gap-3 rounded-lg border border-slate-100 p-3 dark:border-slate-800">
-          <div>
-            <p className="font-medium">{item.description}</p>
-            <p className="text-sm text-slate-500">{item.category?.name ?? "Sem categoria"} - {dateLabel(item.date)}</p>
+      {transactions.map((item) => {
+        const isEditing = editingId === item.id;
+
+        if (isEditing && categories && onUpdate) {
+          const editCategories = categories.filter((category) => categoryMatchesTransactionType(category, editingType));
+
+          return (
+            <form
+              key={item.id}
+              className="grid gap-3 rounded-lg border border-blue-100 p-3 dark:border-blue-500/30 sm:grid-cols-2"
+              onSubmit={async (event) => {
+                event.preventDefault();
+                const form = new FormData(event.currentTarget);
+                await onUpdate(item.id, {
+                  description: String(form.get("description")),
+                  amount: Number(form.get("amount")),
+                  type: String(form.get("type")),
+                  date: String(form.get("date")),
+                  categoryId: String(form.get("categoryId") || "") || undefined
+                });
+                setEditingId(null);
+              }}
+            >
+              <Input name="description" defaultValue={item.description} />
+              <Input name="amount" type="number" step="0.01" defaultValue={Number(item.amount)} />
+              <Select name="type" value={editingType} onChange={(value) => setEditingType(value as Transaction["type"])} options={[["INCOME", "Receita"], ["EXPENSE", "Despesa"]]} />
+              <Select name="categoryId" defaultValue={item.category?.id ?? ""} options={[["", "Sem categoria"], ...editCategories.map((category) => [category.id, category.name] as [string, string])]} />
+              <Input name="date" type="date" defaultValue={String(item.date).slice(0, 10)} />
+              <div className="flex gap-2">
+                <button className="grid h-11 w-11 place-items-center rounded-lg bg-blue-600 text-white" title="Salvar" aria-label="Salvar">
+                  <Save size={17} />
+                </button>
+                <button type="button" onClick={() => setEditingId(null)} className="grid h-11 w-11 place-items-center rounded-lg border border-slate-200 text-slate-700 dark:border-slate-800 dark:text-slate-200" title="Cancelar" aria-label="Cancelar">
+                  <X size={17} />
+                </button>
+              </div>
+            </form>
+          );
+        }
+
+        return (
+          <div key={item.id} className="flex items-center justify-between gap-3 rounded-lg border border-slate-100 p-3 dark:border-slate-800">
+            <div>
+              <p className="font-medium">{item.description}</p>
+              <p className="text-sm text-slate-500">{item.category?.name ?? "Sem categoria"} - {dateLabel(item.date)}</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className={item.type === "INCOME" ? "font-semibold text-emerald-600" : "font-semibold text-red-500"}>
+                {item.type === "INCOME" ? "+" : "-"} {money(item.amount)}
+              </span>
+              {onUpdate && <ActionButton label="Editar movimentacao" onClick={() => {
+                setEditingType(item.type);
+                setEditingId(item.id);
+              }}><Edit3 size={16} /></ActionButton>}
+              {onRemove && <IconButton label="Remover movimentacao" onClick={() => onRemove(item)} />}
+            </div>
           </div>
-          <div className="flex items-center gap-2">
-            <span className={item.type === "INCOME" ? "font-semibold text-emerald-600" : "font-semibold text-red-500"}>
-              {item.type === "INCOME" ? "+" : "-"} {money(item.amount)}
-            </span>
-            {onRemove && <IconButton label="Remover movimentacao" onClick={() => onRemove(item)} />}
-          </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
@@ -904,6 +1253,58 @@ function EmptyState({ text }: { text: string }) {
   return <div className="rounded-lg border border-dashed border-slate-200 p-6 text-center text-sm text-slate-500 dark:border-slate-800 dark:text-slate-400">{text}</div>;
 }
 
+function Pagination({ pagination, onPageChange }: { pagination: PaginatedTransactions; onPageChange: (page: number) => Promise<void> }) {
+  if (pagination.totalPages <= 1) return null;
+
+  return (
+    <div className="mt-4 flex items-center justify-between gap-3 text-sm">
+      <span className="text-slate-500">
+        Pagina {pagination.page} de {pagination.totalPages} - {pagination.total} registros
+      </span>
+      <div className="flex gap-2">
+        <button disabled={pagination.page <= 1} onClick={() => onPageChange(pagination.page - 1)} className="h-9 rounded-lg border border-slate-200 px-3 font-semibold disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-800">
+          Anterior
+        </button>
+        <button disabled={pagination.page >= pagination.totalPages} onClick={() => onPageChange(pagination.page + 1)} className="h-9 rounded-lg border border-slate-200 px-3 font-semibold disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-800">
+          Proxima
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function ActionButton({ label, onClick, children }: { label: string; onClick: () => void; children: ReactNode }) {
+  return (
+    <button type="button" onClick={onClick} title={label} aria-label={label} className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-slate-200 text-slate-600 transition hover:bg-slate-50 dark:border-slate-800 dark:text-slate-300 dark:hover:bg-slate-800">
+      {children}
+    </button>
+  );
+}
+
+function SubmitButton({ disabled, children }: { disabled?: boolean; children: ReactNode }) {
+  return (
+    <button disabled={disabled} className="flex h-11 items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60">
+      {disabled ? "Salvando..." : children}
+    </button>
+  );
+}
+
+function transactionParams(filters: { month: string; type: string; search: string }, page: number, requestId?: number) {
+  return {
+    month: filters.month || undefined,
+    type: filters.type || undefined,
+    search: filters.search || undefined,
+    page,
+    pageSize: 10,
+    _t: requestId
+  };
+}
+
+function categoryMatchesTransactionType(category: Category, type: Transaction["type"]) {
+  if (type === "INCOME") return category.type !== "EXPENSE";
+  return category.type !== "INCOME";
+}
+
 function getEffectiveMonthlyRate(investment: Investment) {
   const cdiMonthlyRate = Number(investment.cdiMonthlyRate ?? 0);
   const cdiPercent = Number(investment.cdiPercent ?? 100);
@@ -997,8 +1398,8 @@ function buildFinancialAdvice(dashboard: DashboardData) {
   return advice;
 }
 
-function Input(props: InputHTMLAttributes<HTMLInputElement>) {
-  return <input {...props} required className="h-11 rounded-lg border border-slate-200 bg-white px-3 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 dark:border-slate-800 dark:bg-slate-950" />;
+function Input({ required = true, ...props }: InputHTMLAttributes<HTMLInputElement>) {
+  return <input {...props} required={required} className="h-11 rounded-lg border border-slate-200 bg-white px-3 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 dark:border-slate-800 dark:bg-slate-950" />;
 }
 
 type SelectProps = Omit<SelectHTMLAttributes<HTMLSelectElement>, "onChange"> & {

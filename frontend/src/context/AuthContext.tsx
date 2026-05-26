@@ -13,24 +13,29 @@ type AuthContextValue = {
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [token, setToken] = useState(() => localStorage.getItem("finance.token"));
+  const [token, setToken] = useState(() => {
+    const storedToken = sessionStorage.getItem("finance.token") ?? localStorage.getItem("finance.token");
+    localStorage.removeItem("finance.token");
+    return storedToken;
+  });
   const [user, setUser] = useState<User | null>(() => {
-    const stored = localStorage.getItem("finance.user");
+    const stored = sessionStorage.getItem("finance.user") ?? localStorage.getItem("finance.user");
+    localStorage.removeItem("finance.user");
     if (!stored) return null;
 
     try {
       return JSON.parse(stored) as User;
     } catch {
-      localStorage.removeItem("finance.token");
-      localStorage.removeItem("finance.user");
+      sessionStorage.removeItem("finance.token");
+      sessionStorage.removeItem("finance.user");
       return null;
     }
   });
 
   async function persistAuth(endpoint: "login" | "register", payload: Record<string, string>) {
     const { data } = await api.post(`/auth/${endpoint}`, payload);
-    localStorage.setItem("finance.token", data.token);
-    localStorage.setItem("finance.user", JSON.stringify(data.user));
+    sessionStorage.setItem("finance.token", data.token);
+    sessionStorage.setItem("finance.user", JSON.stringify(data.user));
     setToken(data.token);
     setUser(data.user);
   }
@@ -42,8 +47,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       login: (email, password) => persistAuth("login", { email, password }),
       register: (name, email, password) => persistAuth("register", { name, email, password }),
       logout: () => {
-        localStorage.removeItem("finance.token");
-        localStorage.removeItem("finance.user");
+        sessionStorage.removeItem("finance.token");
+        sessionStorage.removeItem("finance.user");
         setToken(null);
         setUser(null);
       }
