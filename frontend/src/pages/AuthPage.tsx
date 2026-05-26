@@ -75,11 +75,6 @@ export function AuthPage() {
               Dashboard, agenda, metas, investimentos, filtros e relatorios em uma experiencia rapida, privada e organizada.
             </p>
           </div>
-          <div className="grid gap-3 text-sm text-slate-400 sm:grid-cols-3">
-            <span>JWT seguro</span>
-            <span>PostgreSQL</span>
-            <span>Deploy online</span>
-          </div>
         </section>
 
         <section className="flex items-center justify-center bg-slate-50 px-6 py-10 text-slate-950 dark:bg-slate-900 dark:text-white">
