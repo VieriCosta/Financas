@@ -25,11 +25,35 @@ enum InvestmentType {
   OTHER
 }
 
+enum RecurringResourceType {
+  TRANSACTION
+  BILL
+}
+
+enum RecurrenceFrequency {
+  WEEKLY
+  MONTHLY
+  YEARLY
+}
+
+enum AiHistoryKind {
+  ADVICE
+  COMMAND
+  REPORT
+}
+
+enum AiHistoryStatus {
+  ANSWERED
+  PENDING
+  CONFIRMED
+}
+
 model User {
   id           String        @id @default(uuid())
   name         String
   email        String        @unique
   passwordHash String
+  tokenVersion Int           @default(0)
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
   categories   Category[]
@@ -37,7 +61,16 @@ model User {
   bills        Bill[]
   investments  Investment[]
   goals        Goal[]
-  resetTokens   PasswordResetToken[]
+  budgets      Budget[]
+  recurringRules RecurringRule[]
+  aiHistory    AiHistory[]
+  dashboardPreference DashboardPreference?
+  tags         Tag[]
+  attachments  Attachment[]
+  monthlyClosings MonthlyClosing[]
+  sessions     AuthSession[]
+  auditLogs    AuditLog[]
+  resetTokens  PasswordResetToken[]
 }
 
 model PasswordResetToken {
@@ -61,6 +94,8 @@ model Category {
   userId       String
   user         User              @relation(fields: [userId], references: [id], onDelete: Cascade)
   transactions Transaction[]
+  budgets      Budget[]
+  recurringRules RecurringRule[]
   createdAt    DateTime          @default(now())
   updatedAt    DateTime          @updatedAt
 
@@ -74,12 +109,19 @@ model Transaction {
   type        TransactionType
   date        DateTime
   notes       String?
+  installmentGroupId String?
+  installmentNumber  Int?
+  installmentTotal   Int?
   userId      String
   user        User            @relation(fields: [userId], references: [id], onDelete: Cascade)
   categoryId  String?
   category    Category?       @relation(fields: [categoryId], references: [id], onDelete: SetNull)
   createdAt   DateTime        @default(now())
   updatedAt   DateTime        @updatedAt
+  tags        TransactionTag[]
+  attachments Attachment[]
+
+  @@index([installmentGroupId])
 }
 
 model Bill {
@@ -91,10 +133,153 @@ model Bill {
   isRecurring Boolean    @default(false)
   recurrenceDay Int?
   reminderAt  DateTime?
+  notifiedAt  DateTime?
   userId      String
   user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
   createdAt   DateTime   @default(now())
   updatedAt   DateTime   @updatedAt
+}
+
+model DashboardPreference {
+  id            String   @id @default(uuid())
+  hiddenWidgets String[] @default([])
+  widgetOrder   String[] @default([])
+  chartMonths   Int      @default(6)
+  userId        String   @unique
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  updatedAt     DateTime @updatedAt
+}
+
+model Tag {
+  id           String           @id @default(uuid())
+  name         String
+  color        String           @default("#2563eb")
+  userId       String
+  user         User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions TransactionTag[]
+  createdAt    DateTime         @default(now())
+
+  @@unique([userId, name])
+}
+
+model TransactionTag {
+  transactionId String
+  transaction   Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  tagId         String
+  tag           Tag         @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([transactionId, tagId])
+}
+
+model Attachment {
+  id            String      @id @default(uuid())
+  filename      String
+  mimeType      String
+  size          Int
+  content       Bytes
+  userId        String
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactionId String
+  transaction   Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  createdAt     DateTime    @default(now())
+
+  @@index([transactionId])
+}
+
+model MonthlyClosing {
+  id          String   @id @default(uuid())
+  month       Int
+  year        Int
+  income      Decimal  @db.Decimal(12, 2)
+  expense     Decimal  @db.Decimal(12, 2)
+  budgetTotal Decimal  @db.Decimal(12, 2)
+  snapshot    Json
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([userId, month, year])
+  @@index([userId, year, month])
+}
+
+model AuthSession {
+  id         String    @id @default(uuid())
+  userAgent  String?
+  ipAddress  String?
+  lastSeenAt DateTime  @default(now())
+  expiresAt  DateTime
+  revokedAt  DateTime?
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt  DateTime  @default(now())
+
+  @@index([userId, revokedAt])
+}
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  action     String
+  resource   String
+  resourceId String?
+  details    Json?
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+
+  @@index([userId, createdAt])
+}
+
+model Budget {
+  id          String   @id @default(uuid())
+  limitAmount Decimal  @db.Decimal(12, 2)
+  month       Int
+  year        Int
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  categoryId  String
+  category    Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([userId, categoryId, month, year])
+  @@index([userId, year, month])
+}
+
+model RecurringRule {
+  id              String                @id @default(uuid())
+  resource        RecurringResourceType
+  title           String
+  amount          Decimal               @db.Decimal(12, 2)
+  transactionType TransactionType?
+  frequency       RecurrenceFrequency
+  interval        Int                   @default(1)
+  dayOfMonth      Int?
+  dayOfWeek       Int?
+  nextRunAt       DateTime
+  active          Boolean               @default(true)
+  userId          String
+  user            User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  categoryId      String?
+  category        Category?             @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+
+  @@index([userId, active, nextRunAt])
+}
+
+model AiHistory {
+  id         String          @id @default(uuid())
+  kind       AiHistoryKind
+  status     AiHistoryStatus
+  request    String
+  response   String
+  actionJson Json?
+  userId     String
+  user       User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt  DateTime        @default(now())
+
+  @@index([userId, createdAt])
 }
 
 model Investment {

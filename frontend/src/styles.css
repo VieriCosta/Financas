@@ -15,7 +15,17 @@
 body {
   margin: 0;
   min-width: 320px;
-  background: #f8fafc;
+  background: #f1f5f9;
+}
+
+html:not(.dark) body {
+  background-image:
+    radial-gradient(circle at top right, rgba(37, 99, 235, 0.07), transparent 30rem),
+    linear-gradient(180deg, #f8fafc 0, #eef2f7 100%);
+}
+
+html:not(.dark) .shadow-soft {
+  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.09);
 }
 
 button,

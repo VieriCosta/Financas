@@ -11,7 +11,7 @@ export default {
         mist: "#f8fafc"
       },
       boxShadow: {
-        soft: "0 18px 60px rgba(15, 23, 42, 0.08)"
+        soft: "0 12px 32px rgba(15, 23, 42, 0.09)"
       }
     }
   },

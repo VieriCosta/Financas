@@ -20,11 +20,17 @@ docker compose up -d postgres
 
 ```text
 DATABASE_URL="postgresql://postgres:postgres@localhost:5432/financas"
+NODE_ENV="development"
 JWT_SECRET="troque-por-um-segredo-local-com-mais-de-32-caracteres"
 JWT_EXPIRES_IN="7d"
 PORT=3333
 CORS_ORIGINS="http://localhost:5173,http://127.0.0.1:5173,http://192.168.1.73:5173"
 APP_URL="http://192.168.1.73:5173"
+TRUST_PROXY=0
+ENABLE_API_DOCS=true
+ENABLE_DEV_PASSWORD_RESET_LINKS=true
+OPENAI_API_KEY="sua-chave-da-openai"
+OPENAI_MODEL="gpt-5.4-mini"
 ```
 
 4. Rode migrations e gere Prisma Client:
@@ -96,7 +102,44 @@ SMTP_PASS="senha-ou-app-password"
 SMTP_FROM="Financas Pessoais <no-reply@seudominio.com>"
 ```
 
-Sem SMTP, o backend imprime o link no console para teste local.
+Sem SMTP, o backend so devolve o link para teste local quando `NODE_ENV=development` e
+`ENABLE_DEV_PASSWORD_RESET_LINKS=true`. Em producao, SMTP e HTTPS sao obrigatorios.
+
+## Assistente de IA
+
+Configure a chave da OpenAI somente no backend:
+
+```text
+OPENAI_API_KEY="sua-chave-da-openai"
+OPENAI_MODEL="gpt-5.4-mini"
+```
+
+O modo de conselho recebe um resumo financeiro do usuario. O modo de comandos rapidos
+interpreta ate 10 movimentacoes, contas, investimentos e metas no mesmo pedido. Ele
+tambem pode propor edicoes e exclusoes, mas sempre exige confirmacao antes de gravar
+dados. A aba ainda oferece historico das interacoes e relatorio mensal gerado sob demanda.
+
+## Planejamento Financeiro
+
+A aba `Planejamento` inclui:
+
+- compras parceladas distribuidas automaticamente nas movimentacoes;
+- limites mensais por categoria com acompanhamento do consumo;
+- regras recorrentes semanais, mensais ou anuais para movimentacoes e contas;
+- saldo projetado para os proximos 30 dias no dashboard.
+
+O backend verifica regras vencidas e contas proximas do vencimento ao iniciar e a cada
+hora. Lembretes por e-mail sao enviados quando SMTP estiver configurado.
+
+## Insights e Seguranca
+
+A aba `Insights` inclui fechamento mensal, alertas internos, indicador de reserva de
+emergencia e personalizacao dos blocos do dashboard. O historico de auditoria registra
+alteracoes importantes, incluindo comandos confirmados pela IA.
+
+As movimentacoes aceitam filtros por categoria, tag e faixa de valor, alem de selecao em
+lote. Comprovantes PDF, PNG e JPG podem ser anexados com limite de 2 MB. Cada login cria
+uma sessao revogavel; outras sessoes podem ser encerradas pela tela de insights.
 
 ## Deploy Gratuito
 
@@ -128,16 +171,22 @@ npm run start
 
 ```text
 DATABASE_URL=postgresql://USER:PASSWORD@HOST/neondb?sslmode=require
+NODE_ENV=production
 JWT_SECRET=gere-um-segredo-unico-com-mais-de-32-caracteres
 JWT_EXPIRES_IN=7d
 PORT=10000
 CORS_ORIGINS=https://seu-frontend.vercel.app
 APP_URL=https://seu-frontend.vercel.app
-SMTP_HOST=
+TRUST_PROXY=1
+ENABLE_API_DOCS=false
+ENABLE_DEV_PASSWORD_RESET_LINKS=false
+OPENAI_API_KEY=sua-chave-da-openai
+OPENAI_MODEL=gpt-5.4-mini
+SMTP_HOST=smtp.seuprovedor.com
 SMTP_PORT=587
 SMTP_SECURE=false
-SMTP_USER=
-SMTP_PASS=
+SMTP_USER=usuario
+SMTP_PASS=senha-ou-app-password
 SMTP_FROM=Financas Pessoais <no-reply@seudominio.com>
 ```
 
@@ -160,8 +209,5 @@ CORS_ORIGINS=https://seu-frontend.vercel.app
 APP_URL=https://seu-frontend.vercel.app
 ```
 
-Se usar preview deployments da Vercel, voce pode usar wildcard:
-
-```text
-CORS_ORIGINS=https://seu-frontend.vercel.app,https://*.vercel.app
-```
+Cadastre origens completas em `CORS_ORIGINS`. Wildcards nao sao aceitos, para evitar
+que previews ou dominios parecidos recebam acesso indevido a API.

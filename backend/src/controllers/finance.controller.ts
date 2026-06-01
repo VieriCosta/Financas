@@ -1,7 +1,10 @@
 import { Request, Response } from "express";
 import { prisma } from "../config/prisma.js";
-import { billDto, categoryDto, financeFiltersDto, goalDto, investmentDto, transactionDto, updateBillDto, updateGoalDto, updateInvestmentDto, updateTransactionDto } from "../dtos/finance.dto.js";
+import { billDto, budgetDto, categoryDto, financeFiltersDto, goalDto, installmentDto, investmentDto, recurringRuleDto, transactionDto, updateBillDto, updateGoalDto, updateInvestmentDto, updateTransactionDto } from "../dtos/finance.dto.js";
 import { buildTransactionWhere, ensureRecurringBills, getDashboard, toCsv } from "../services/finance.service.js";
+import { createInstallments, listBudgets, listRecurringRules, upsertBudget } from "../services/planning.service.js";
+import { AppError } from "../utils/AppError.js";
+import { audit } from "../services/insights.service.js";
 
 export async function dashboard(req: Request, res: Response) {
   return res.json(await getDashboard(req.userId));
@@ -22,7 +25,7 @@ export async function listTransactions(req: Request, res: Response) {
   const [items, total] = await Promise.all([
     prisma.transaction.findMany({
       where,
-      include: { category: true },
+      include: { category: true, tags: { include: { tag: true } }, attachments: { select: { id: true, filename: true, mimeType: true, size: true } } },
       orderBy: { date: "desc" },
       skip: (filters.page - 1) * filters.pageSize,
       take: filters.pageSize
@@ -65,12 +68,60 @@ export async function exportTransactionsCsv(req: Request, res: Response) {
 
 export async function createTransaction(req: Request, res: Response) {
   const data = transactionDto.parse(req.body);
-  return res.status(201).json(await prisma.transaction.create({ data: { ...data, userId: req.userId } }));
+  await ensureCategoryOwnership(req.userId, data.categoryId, data.type);
+  const transaction = await prisma.transaction.create({ data: { ...data, userId: req.userId } });
+  await audit(req.userId, "CREATE", "TRANSACTION", transaction.id);
+  return res.status(201).json(transaction);
+}
+
+export async function createInstallmentPurchase(req: Request, res: Response) {
+  const data = installmentDto.parse(req.body);
+  return res.status(201).json(await createInstallments(req.userId, data));
+}
+
+export async function getBudgets(req: Request, res: Response) {
+  const now = new Date();
+  const month = Number(req.query.month ?? now.getMonth() + 1);
+  const year = Number(req.query.year ?? now.getFullYear());
+  return res.json(await listBudgets(req.userId, month, year));
+}
+
+export async function saveBudget(req: Request, res: Response) {
+  return res.status(201).json(await upsertBudget(req.userId, budgetDto.parse(req.body)));
+}
+
+export async function deleteBudget(req: Request, res: Response) {
+  await prisma.budget.deleteMany({ where: { id: String(req.params.id), userId: req.userId } });
+  return res.status(204).send();
+}
+
+export async function getRecurringRules(req: Request, res: Response) {
+  return res.json(await listRecurringRules(req.userId));
+}
+
+export async function createRecurringRule(req: Request, res: Response) {
+  const data = recurringRuleDto.parse(req.body);
+  if (data.categoryId && data.transactionType) await ensureCategoryOwnership(req.userId, data.categoryId, data.transactionType);
+  return res.status(201).json(await prisma.recurringRule.create({ data: { ...data, userId: req.userId } }));
+}
+
+export async function deleteRecurringRule(req: Request, res: Response) {
+  await prisma.recurringRule.deleteMany({ where: { id: String(req.params.id), userId: req.userId } });
+  return res.status(204).send();
 }
 
 export async function updateTransaction(req: Request, res: Response) {
   const data = updateTransactionDto.parse(req.body);
   const transactionId = String(req.params.id);
+  const currentTransaction = await prisma.transaction.findFirstOrThrow({
+    where: { id: transactionId, userId: req.userId }
+  });
+
+  await ensureCategoryOwnership(
+    req.userId,
+    data.categoryId ?? currentTransaction.categoryId ?? undefined,
+    data.type ?? currentTransaction.type
+  );
 
   await prisma.transaction.updateMany({
     where: { id: transactionId, userId: req.userId },
@@ -81,6 +132,7 @@ export async function updateTransaction(req: Request, res: Response) {
     where: { id: transactionId, userId: req.userId },
     include: { category: true }
   });
+  await audit(req.userId, "UPDATE", "TRANSACTION", transaction.id);
 
   return res.json(transaction);
 }
@@ -88,6 +140,7 @@ export async function updateTransaction(req: Request, res: Response) {
 export async function deleteTransaction(req: Request, res: Response) {
   const transactionId = String(req.params.id);
   await prisma.transaction.deleteMany({ where: { id: transactionId, userId: req.userId } });
+  await audit(req.userId, "DELETE", "TRANSACTION", transactionId);
   return res.status(204).send();
 }
 
@@ -204,4 +257,16 @@ export async function deleteGoal(req: Request, res: Response) {
   const goalId = String(req.params.id);
   await prisma.goal.deleteMany({ where: { id: goalId, userId: req.userId } });
   return res.status(204).send();
+}
+
+async function ensureCategoryOwnership(userId: string, categoryId: string | undefined, transactionType: "INCOME" | "EXPENSE") {
+  if (!categoryId) return;
+
+  const category = await prisma.category.findFirst({
+    where: { id: categoryId, userId }
+  });
+
+  if (!category || (category.type && category.type !== transactionType)) {
+    throw new AppError("Categoria invalida para esta movimentacao.", 400);
+  }
 }

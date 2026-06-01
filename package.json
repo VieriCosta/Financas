@@ -12,6 +12,7 @@
     "dev:frontend": "npm run start:frontend",
     "start:frontend": "npm run build -w frontend && npm run preview -w frontend",
     "build": "npm run build -w backend && npm run build -w frontend",
+    "check:secrets": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/check-staged-secrets.ps1",
     "lint": "npm run lint -w backend && npm run lint -w frontend",
     "format": "prettier --write \"**/*.{ts,tsx,js,json,md,css,yml}\""
   },

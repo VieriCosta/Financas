@@ -12,13 +12,19 @@ function resolveApiUrl() {
 
 export const api = axios.create({
   baseURL: resolveApiUrl(),
+  withCredentials: true,
   headers: {
     "Cache-Control": "no-cache"
   }
 });
 
 api.interceptors.request.use((config) => {
-  const token = sessionStorage.getItem("finance.token");
-  if (token) config.headers.Authorization = `Bearer ${token}`;
+  const method = config.method?.toUpperCase() ?? "GET";
+  const csrfToken = sessionStorage.getItem("finance.csrf");
+
+  if (!["GET", "HEAD", "OPTIONS"].includes(method) && csrfToken) {
+    config.headers["X-CSRF-Token"] = csrfToken;
+  }
+
   return config;
 });

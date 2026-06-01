@@ -17,6 +17,10 @@ build/
 !.env.*.example
 !**/.env.example
 !**/.env.*.example
+*.secret
+*.secrets
+**/*.secret
+**/*.secrets
 .envrc
 **/.envrc
 

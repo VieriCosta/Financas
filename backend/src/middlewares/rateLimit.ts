@@ -3,6 +3,8 @@ import { NextFunction, Request, Response } from "express";
 type RateLimitOptions = {
   windowMs: number;
   max: number;
+  scope: string;
+  key?: (req: Request) => string;
   message?: string;
 };
 
@@ -12,15 +14,26 @@ type Bucket = {
 };
 
 const buckets = new Map<string, Bucket>();
+const maxBuckets = 10_000;
 
-export function rateLimit({ windowMs, max, message = "Muitas tentativas. Tente novamente em instantes." }: RateLimitOptions) {
+export function rateLimit({ windowMs, max, scope, key, message = "Muitas tentativas. Tente novamente em instantes." }: RateLimitOptions) {
   return (req: Request, res: Response, next: NextFunction) => {
     const now = Date.now();
-    const key = `${req.ip}:${req.originalUrl}`;
-    const current = buckets.get(key);
+    const bucketKey = `${scope}:${req.ip}:${key?.(req) ?? ""}`;
+    const current = buckets.get(bucketKey);
 
     if (!current || current.resetAt <= now) {
-      buckets.set(key, { count: 1, resetAt: now + windowMs });
+      if (buckets.size >= maxBuckets) {
+        for (const [storedKey, bucket] of buckets) {
+          if (bucket.resetAt <= now) buckets.delete(storedKey);
+        }
+      }
+
+      if (buckets.size >= maxBuckets) {
+        return res.status(429).json({ message });
+      }
+
+      buckets.set(bucketKey, { count: 1, resetAt: now + windowMs });
       return next();
     }
 

@@ -23,3 +23,9 @@ test("toCsv escapa campos com virgula e aspas", () => {
 
   assert.equal(csv, 'descricao,valor,categoria\n"Mercado ""Centro""",120.5,"Casa, compras"');
 });
+
+test("toCsv neutraliza formulas interpretadas por planilhas", () => {
+  const csv = toCsv([{ descricao: "=HYPERLINK(\"https://example.com\")" }]);
+
+  assert.equal(csv, 'descricao\n"\'=HYPERLINK(""https://example.com"")"');
+});

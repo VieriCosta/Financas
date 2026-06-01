@@ -6,7 +6,9 @@ import { sendPasswordResetEmail } from "./mail.service.js";
 import { AppError } from "../utils/AppError.js";
 import { signToken } from "../utils/jwt.js";
 
-export async function registerUser(input: { name: string; email: string; password: string }) {
+type SessionMetadata = { userAgent?: string; ipAddress?: string };
+
+export async function registerUser(input: { name: string; email: string; password: string }, metadata: SessionMetadata = {}) {
   const existingUser = await prisma.user.findUnique({ where: { email: input.email } });
 
   if (existingUser) {
@@ -30,13 +32,17 @@ export async function registerUser(input: { name: string; email: string; passwor
         ]
       }
     },
-    select: { id: true, name: true, email: true }
+    select: { id: true, name: true, email: true, tokenVersion: true }
   });
 
-  return { user, token: signToken({ sub: user.id, email: user.email }) };
+  const session = await createAuthSession(user.id, metadata);
+  return {
+    user: { id: user.id, name: user.name, email: user.email },
+    token: signToken({ sub: user.id, email: user.email, ver: user.tokenVersion, sid: session.id })
+  };
 }
 
-export async function loginUser(input: { email: string; password: string }) {
+export async function loginUser(input: { email: string; password: string }, metadata: SessionMetadata = {}) {
   const user = await prisma.user.findUnique({ where: { email: input.email } });
 
   if (!user) {
@@ -49,22 +55,27 @@ export async function loginUser(input: { email: string; password: string }) {
     throw new AppError("Credenciais invalidas.", 401);
   }
 
+  const session = await createAuthSession(user.id, metadata);
   return {
     user: { id: user.id, name: user.name, email: user.email },
-    token: signToken({ sub: user.id, email: user.email })
+    token: signToken({ sub: user.id, email: user.email, ver: user.tokenVersion, sid: session.id })
   };
+}
+
+export function createAuthSession(userId: string, metadata: SessionMetadata = {}) {
+  return prisma.authSession.create({
+    data: {
+      userId,
+      userAgent: metadata.userAgent?.slice(0, 255),
+      ipAddress: metadata.ipAddress?.slice(0, 80),
+      expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+    }
+  });
 }
 
 function hashResetToken(token: string) {
   return crypto.createHash("sha256").update(token).digest("hex");
 }
-
-type PasswordResetRow = {
-  id: string;
-  userId: string;
-  expiresAt: Date;
-  usedAt: Date | null;
-};
 
 export async function requestPasswordReset(input: { email: string }) {
   const user = await prisma.user.findUnique({ where: { email: input.email } });
@@ -73,38 +84,33 @@ export async function requestPasswordReset(input: { email: string }) {
     return { emailSent: true, resetUrl: null };
   }
 
-  await prisma.$executeRaw`
-    UPDATE "PasswordResetToken"
-    SET "usedAt" = ${new Date()}
-    WHERE "userId" = ${user.id} AND "usedAt" IS NULL
-  `;
+  await prisma.passwordResetToken.updateMany({
+    where: { userId: user.id, usedAt: null },
+    data: { usedAt: new Date() }
+  });
 
   const token = crypto.randomBytes(32).toString("hex");
   const tokenHash = hashResetToken(token);
   const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
 
-  await prisma.$executeRaw`
-    INSERT INTO "PasswordResetToken" ("id", "tokenHash", "expiresAt", "userId", "createdAt")
-    VALUES (${crypto.randomUUID()}, ${tokenHash}, ${expiresAt}, ${user.id}, ${new Date()})
-  `;
+  await prisma.passwordResetToken.create({
+    data: { tokenHash, expiresAt, userId: user.id }
+  });
 
   const resetUrl = `${env.APP_URL}/?resetToken=${token}`;
   const result = await sendPasswordResetEmail({ to: user.email, resetUrl });
 
   return {
     emailSent: result.sent,
-    resetUrl: result.sent ? null : resetUrl
+    resetUrl: !result.sent && env.ENABLE_DEV_PASSWORD_RESET_LINKS && !env.IS_PRODUCTION ? resetUrl : null
   };
 }
 
 export async function resetPassword(input: { token: string; password: string }) {
   const tokenHash = hashResetToken(input.token);
-  const [resetToken] = await prisma.$queryRaw<PasswordResetRow[]>`
-    SELECT "id", "userId", "expiresAt", "usedAt"
-    FROM "PasswordResetToken"
-    WHERE "tokenHash" = ${tokenHash}
-    LIMIT 1
-  `;
+  const resetToken = await prisma.passwordResetToken.findUnique({
+    where: { tokenHash }
+  });
 
   if (!resetToken || resetToken.usedAt || resetToken.expiresAt < new Date()) {
     throw new AppError("Link de redefinicao invalido ou expirado.", 400);
@@ -115,13 +121,15 @@ export async function resetPassword(input: { token: string; password: string }) 
   await prisma.$transaction(async (tx) => {
     await tx.user.update({
       where: { id: resetToken.userId },
-      data: { passwordHash }
+      data: {
+        passwordHash,
+        tokenVersion: { increment: 1 }
+      }
     });
 
-    await tx.$executeRaw`
-      UPDATE "PasswordResetToken"
-      SET "usedAt" = ${new Date()}
-      WHERE "id" = ${resetToken.id}
-    `;
+    await tx.passwordResetToken.update({
+      where: { id: resetToken.id },
+      data: { usedAt: new Date() }
+    });
   });
 }

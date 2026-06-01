@@ -1,5 +1,6 @@
 import { Prisma, TransactionType } from "@prisma/client";
 import { prisma } from "../config/prisma.js";
+import { getFinancialProjection } from "./planning.service.js";
 
 export function buildTransactionWhere(userId: string, filters: Record<string, unknown>) {
   const where: Prisma.TransactionWhereInput = { userId };
@@ -7,6 +8,13 @@ export function buildTransactionWhere(userId: string, filters: Record<string, un
 
   if (filters.type) where.type = filters.type as TransactionType;
   if (filters.categoryId) where.categoryId = String(filters.categoryId);
+  if (filters.tagId) where.tags = { some: { tagId: String(filters.tagId) } };
+  if (filters.minAmount != null || filters.maxAmount != null) {
+    where.amount = {
+      gte: filters.minAmount != null ? Number(filters.minAmount) : undefined,
+      lte: filters.maxAmount != null ? Number(filters.maxAmount) : undefined
+    };
+  }
   if (filters.search) {
     and.push({
       OR: [
@@ -47,7 +55,7 @@ export async function getDashboard(userId: string) {
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
   const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
 
-  const [transactions, investments, goals, bills] = await Promise.all([
+  const [transactions, investments, goals, bills, projection, preference] = await Promise.all([
     prisma.transaction.findMany({
       where: { userId },
       include: { category: true },
@@ -55,7 +63,9 @@ export async function getDashboard(userId: string) {
     }),
     prisma.investment.findMany({ where: { userId }, orderBy: { updatedAt: "desc" } }),
     prisma.goal.findMany({ where: { userId }, orderBy: { deadline: "asc" } }),
-    prisma.bill.findMany({ where: { userId }, orderBy: { dueDate: "asc" } })
+    prisma.bill.findMany({ where: { userId }, orderBy: { dueDate: "asc" } }),
+    getFinancialProjection(userId),
+    prisma.dashboardPreference.findUnique({ where: { userId } })
   ]);
 
   const totals = transactions.reduce(
@@ -81,8 +91,9 @@ export async function getDashboard(userId: string) {
   const investmentTotal = investments.reduce((sum, item) => sum + Number(item.currentValue), 0);
   const balance = totals.income - totals.expense - paidBillsTotal + investmentTotal;
 
-  const monthlySeries = Array.from({ length: 6 }).map((_, index) => {
-    const date = new Date(now.getFullYear(), now.getMonth() - (5 - index), 1);
+  const chartMonths = preference?.chartMonths ?? 6;
+  const monthlySeries = Array.from({ length: chartMonths }).map((_, index) => {
+    const date = new Date(now.getFullYear(), now.getMonth() - (chartMonths - 1 - index), 1);
     const monthTransactions = transactions.filter(
       (item) => item.date.getMonth() === date.getMonth() && item.date.getFullYear() === date.getFullYear()
     );
@@ -120,8 +131,10 @@ export async function getDashboard(userId: string) {
       balance,
       monthIncome: totals.monthIncome,
       monthExpense: totals.monthExpense + paidBillsThisMonth,
-      investments: investmentTotal
+      investments: investmentTotal,
+      projectedBalance: projection.projectedBalance
     },
+    projection,
     monthlySeries,
     categorySummary: Object.entries(categorySummary).map(([name, item]) => ({ name, value: item.value, color: item.color })),
     goals,
@@ -173,7 +186,8 @@ export function toCsv(rows: Array<Record<string, string | number | null | undefi
   if (!rows.length) return "";
   const headers = Object.keys(rows[0]);
   const escape = (value: string | number | null | undefined) => {
-    const text = value == null ? "" : String(value);
+    const rawText = value == null ? "" : String(value);
+    const text = typeof value === "string" && /^[=+\-@\t\r]/.test(rawText) ? `'${rawText}` : rawText;
     return /[",\n\r;]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
   };
 

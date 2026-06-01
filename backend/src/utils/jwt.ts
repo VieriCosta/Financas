@@ -5,6 +5,8 @@ import { env } from "../config/env.js";
 export type JwtPayload = {
   sub: string;
   email: string;
+  ver: number;
+  sid: string;
 };
 
 export function signToken(payload: JwtPayload) {
