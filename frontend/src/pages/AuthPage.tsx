@@ -7,6 +7,7 @@ type AuthMode = "login" | "register" | "forgot" | "reset";
 
 export function AuthPage() {
   const { login, register } = useAuth();
+  const currentYear = new Date().getFullYear();
   const resetToken = new URLSearchParams(window.location.search).get("resetToken");
   const [mode, setMode] = useState<AuthMode>(resetToken ? "reset" : "login");
   const [loading, setLoading] = useState(false);
@@ -59,7 +60,7 @@ export function AuthPage() {
   }[mode];
 
   return (
-    <main className="min-h-screen bg-slate-950 text-white">
+    <main className="auth-shell min-h-screen bg-slate-950 text-white">
       <div className="grid min-h-screen lg:grid-cols-[1.1fr_0.9fr]">
         <section className="flex flex-col justify-between px-6 py-8 sm:px-10 lg:px-16">
           <div className="flex items-center gap-3 text-lg font-semibold">
@@ -74,11 +75,43 @@ export function AuthPage() {
             <p className="mt-6 max-w-xl text-lg leading-8 text-slate-300">
               Dashboard, agenda, metas, investimentos, filtros e relatorios em uma experiencia rapida, privada e organizada.
             </p>
+            <div className="mt-10 grid max-w-md grid-cols-3 gap-2">
+              <div className="signal-tile h-24 rounded-lg border border-white/10 bg-white/10 p-3">
+                <span />
+                <p>Saldo</p>
+              </div>
+              <div className="signal-tile is-delayed h-24 rounded-lg border border-white/10 bg-white/10 p-3">
+                <span />
+                <p>Metas</p>
+              </div>
+              <div className="signal-tile h-24 rounded-lg border border-white/10 bg-white/10 p-3">
+                <span />
+                <p>Carteira</p>
+              </div>
+            </div>
+            <div className="finance-ticker mt-4 max-w-md rounded-lg border border-white/10 bg-white/10 py-2 text-xs font-medium text-amber-100">
+              <div>
+                <span>Receita +12%</span>
+                <span>Reserva 68%</span>
+                <span>CDI 10.5%</span>
+                <span>Meta +R$ 840</span>
+                <span>Receita +12%</span>
+                <span>Reserva 68%</span>
+              </div>
+            </div>
+          </div>
+          <div className="flex flex-col gap-3 text-xs text-slate-400 sm:flex-row sm:items-center sm:justify-between">
+            <span>&copy; {currentYear} Financas Pessoais. Todos os direitos reservados.</span>
+            <div className="flex flex-wrap gap-x-5 gap-y-2">
+              <span>Privacidade</span>
+              <span>Termos de uso</span>
+              <span>Seguranca</span>
+            </div>
           </div>
         </section>
 
         <section className="flex items-center justify-center bg-slate-50 px-6 py-10 text-slate-950 dark:bg-slate-900 dark:text-white">
-          <form onSubmit={onSubmit} className="w-full max-w-md rounded-lg border border-slate-200 bg-white p-6 shadow-soft dark:border-slate-800 dark:bg-slate-950">
+          <form onSubmit={onSubmit} className="auth-card w-full max-w-md rounded-lg border border-slate-200 bg-white p-6 shadow-soft dark:border-slate-800 dark:bg-slate-950">
             <div className="mb-6 flex items-center gap-3">
               <span className="grid h-10 w-10 place-items-center rounded-lg bg-blue-100 text-blue-700 dark:bg-blue-500/15 dark:text-blue-300">
                 <LockKeyhole size={20} />
@@ -96,7 +129,7 @@ export function AuthPage() {
             {error && <p className="mb-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-500/10 dark:text-red-300">{error}</p>}
             {message && <p className="mb-4 rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300">{message}</p>}
 
-            <button className="flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-blue-600 font-semibold text-white transition hover:bg-blue-700" disabled={loading}>
+            <button className="interactive-button flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-blue-600 font-semibold text-white transition hover:bg-blue-700" disabled={loading}>
               {loading && <Loader2 className="animate-spin" size={18} />}
               {mode === "login" && "Acessar dashboard"}
               {mode === "register" && "Cadastrar"}

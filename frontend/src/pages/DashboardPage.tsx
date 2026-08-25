@@ -421,13 +421,13 @@ export function DashboardPage() {
   }
 
   if (loading) {
-    return <div className="grid min-h-screen place-items-center bg-slate-50 text-slate-600 dark:bg-slate-950 dark:text-slate-300">Carregando painel financeiro...</div>;
+    return <div className="app-shell grid min-h-screen place-items-center bg-slate-50 text-slate-600 dark:bg-slate-950 dark:text-slate-300">Carregando painel financeiro...</div>;
   }
 
   return (
-    <main className="min-h-screen bg-slate-100 text-slate-950 transition-colors dark:bg-slate-950 dark:text-white">
+    <main className="app-shell min-h-screen bg-slate-100 text-slate-950 transition-colors dark:bg-slate-950 dark:text-white">
       {toast && <ToastMessage toast={toast} />}
-      <aside className="fixed inset-y-0 left-0 z-20 hidden w-64 border-r border-slate-300 bg-white/95 shadow-sm backdrop-blur dark:border-slate-800 dark:bg-slate-950/95 lg:block">
+      <aside className="surface-nav fixed inset-y-0 left-0 z-20 hidden w-64 border-r border-slate-300 bg-white/95 shadow-sm backdrop-blur dark:border-slate-800 dark:bg-slate-950/95 lg:block">
         <div className="flex h-20 items-center gap-3 px-5 text-blue-600">
           <span className="grid h-11 w-11 place-items-center rounded-lg bg-blue-600 text-white">
             <WalletCards size={22} />
@@ -457,7 +457,7 @@ export function DashboardPage() {
       </aside>
 
       <section className="lg:pl-64">
-        <header className="sticky top-0 z-10 border-b border-slate-300 bg-white/90 px-4 py-4 shadow-sm backdrop-blur dark:border-slate-800 dark:bg-slate-950/85 dark:shadow-none sm:px-6">
+        <header className="surface-header sticky top-0 z-10 border-b border-slate-300 bg-white/90 px-4 py-4 shadow-sm backdrop-blur dark:border-slate-800 dark:bg-slate-950/85 dark:shadow-none sm:px-6">
           <div className="mx-auto flex max-w-7xl items-center justify-between gap-3">
             <div>
               <p className="text-sm text-slate-500 dark:text-slate-400">Ola, {user?.name}</p>
@@ -538,8 +538,60 @@ export function DashboardPage() {
 function Overview({ dashboard, preference, onBillStatusChange }: { dashboard: DashboardData; preference: DashboardPreference; onBillStatusChange: (bill: Bill) => Promise<void> }) {
   const hidden = new Set(preference.hiddenWidgets);
   const order = (widget: string) => preference.widgetOrder.indexOf(widget) === -1 ? 99 : preference.widgetOrder.indexOf(widget);
+  const monthResult = dashboard.cards.monthIncome - dashboard.cards.monthExpense;
+  const spendingRatio = dashboard.cards.monthIncome > 0 ? Math.round((dashboard.cards.monthExpense / dashboard.cards.monthIncome) * 100) : 0;
+
   return (
     <div className="grid gap-5">
+      {!hidden.has("metrics") && (
+        <section className="overview-hero surface-card animate-rise grid gap-6 rounded-xl border border-slate-300 p-6 dark:border-slate-800 xl:grid-cols-[1fr_0.72fr]">
+          <div>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <p className="text-sm text-slate-500 dark:text-slate-400">Saldo disponivel</p>
+              <div className="capital-flow" aria-hidden="true">
+                <span />
+                <span />
+                <span />
+              </div>
+            </div>
+            <strong className="mt-3 block text-4xl font-semibold tracking-normal sm:text-5xl">{money(dashboard.cards.balance)}</strong>
+            <div className="growth-chart mt-7 max-w-2xl" aria-hidden="true">
+              <svg viewBox="0 0 640 150" role="presentation">
+                <defs>
+                  <linearGradient id="growthStroke" x1="0" x2="1" y1="0" y2="0">
+                    <stop offset="0%" stopColor="#6f7d62" />
+                    <stop offset="68%" stopColor="#283421" />
+                    <stop offset="100%" stopColor="#b88936" />
+                  </linearGradient>
+                  <linearGradient id="growthFill" x1="0" x2="0" y1="0" y2="1">
+                    <stop offset="0%" stopColor="#6f7d62" stopOpacity="0.18" />
+                    <stop offset="100%" stopColor="#6f7d62" stopOpacity="0" />
+                  </linearGradient>
+                </defs>
+                <path className="growth-fill" d="M16 116 C78 78 118 80 166 93 C226 111 252 52 311 65 C369 78 392 98 448 61 C505 23 558 43 624 18 L624 138 L16 138 Z" />
+                <path className="growth-path" d="M16 116 C78 78 118 80 166 93 C226 111 252 52 311 65 C369 78 392 98 448 61 C505 23 558 43 624 18" />
+                <circle className="growth-dot dot-one" cx="166" cy="93" r="6" />
+                <circle className="growth-dot dot-two" cx="311" cy="65" r="6" />
+                <circle className="growth-dot dot-three" cx="624" cy="18" r="7" />
+              </svg>
+            </div>
+            <div className="mt-5 flex flex-wrap gap-2 text-sm">
+              <span className={monthResult >= 0 ? "finance-pill rounded-full border px-3 py-1 font-medium" : "rounded-full border border-red-200 px-3 py-1 font-medium text-red-700 dark:border-red-500/30 dark:text-red-300"}>
+                {monthResult >= 0 ? "+" : "-"} {money(Math.abs(monthResult))} no mes
+              </span>
+              <span className="finance-pill-muted rounded-full border px-3 py-1 font-medium">
+                {spendingRatio}% da receita usada
+              </span>
+            </div>
+          </div>
+          <div className="grid content-stretch gap-3 sm:grid-cols-3 xl:grid-cols-1">
+            <MiniStat label="Receitas" value={money(dashboard.cards.monthIncome)} tone="income" />
+            <MiniStat label="Despesas" value={money(dashboard.cards.monthExpense)} tone="expense" />
+            <MiniStat label="Investido" value={money(dashboard.cards.investments)} tone="wealth" />
+          </div>
+        </section>
+      )}
+
       {!hidden.has("metrics") && <section style={{ order: order("metrics") }} className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
         <Metric title="Saldo total" value={money(dashboard.cards.balance)} icon={<WalletCards />} tone="blue" />
         <Metric title="Receitas do mes" value={money(dashboard.cards.monthIncome)} icon={<ArrowUpCircle />} tone="green" />
@@ -555,16 +607,16 @@ function Overview({ dashboard, preference, onBillStatusChange }: { dashboard: Da
               <AreaChart data={dashboard.monthlySeries.slice(-preference.chartMonths)}>
                 <defs>
                   <linearGradient id="income" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#2563eb" stopOpacity={0.28} />
-                    <stop offset="95%" stopColor="#2563eb" stopOpacity={0} />
+                    <stop offset="5%" stopColor="#6f7d62" stopOpacity={0.22} />
+                    <stop offset="95%" stopColor="#6f7d62" stopOpacity={0} />
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
                 <XAxis dataKey="month" />
                 <YAxis />
                 <Tooltip formatter={(value) => money(Number(value))} />
-                <Area type="monotone" dataKey="receitas" stroke="#2563eb" fill="url(#income)" strokeWidth={3} />
-                <Area type="monotone" dataKey="despesas" stroke="#ef4444" fill="#ef444422" strokeWidth={3} />
+                <Area type="monotone" dataKey="receitas" stroke="#6f7d62" fill="url(#income)" strokeWidth={3} />
+                <Area type="monotone" dataKey="despesas" stroke="#b88936" fill="#efe4c8" strokeWidth={3} />
               </AreaChart>
             </ResponsiveContainer>
           </div>
@@ -576,7 +628,7 @@ function Overview({ dashboard, preference, onBillStatusChange }: { dashboard: Da
               <PieChart>
                 <Pie data={dashboard.categorySummary} dataKey="value" nameKey="name" outerRadius={110} label>
                   {dashboard.categorySummary.map((entry) => (
-                    <Cell key={entry.name} fill={entry.color ?? "#2563eb"} />
+                    <Cell key={entry.name} fill={entry.color ?? "#6f7d62"} />
                   ))}
                 </Pie>
                 <Tooltip formatter={(value) => money(Number(value))} />
@@ -598,6 +650,21 @@ function Overview({ dashboard, preference, onBillStatusChange }: { dashboard: Da
           <GoalList goals={dashboard.goals.slice(0, 4)} />
         </Panel>}
       </section>}
+    </div>
+  );
+}
+
+function MiniStat({ label, value, tone }: { label: string; value: string; tone: "income" | "expense" | "wealth" }) {
+  return (
+    <div className={`mini-stat mini-stat-${tone} rounded-lg border border-white/70 bg-white/55 p-3 dark:border-white/10 dark:bg-white/5`}>
+      <p className="text-xs text-slate-500 dark:text-slate-400">{label}</p>
+      <strong className="mt-1 block text-base font-semibold">{value}</strong>
+      <div aria-hidden="true">
+        <span />
+        <span />
+        <span />
+        <span />
+      </div>
     </div>
   );
 }

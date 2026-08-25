@@ -4,6 +4,13 @@
 
 :root {
   color-scheme: light;
+  --finance-bg: #fbfaf4;
+  --finance-ink: #171a15;
+  --finance-forest: #283421;
+  --finance-moss: #6f7d62;
+  --finance-sage: #dfe5d4;
+  --finance-gold: #b88936;
+  --finance-champagne: #efe4c8;
   font-family:
     Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
@@ -15,23 +22,325 @@
 body {
   margin: 0;
   min-width: 320px;
-  background: #f1f5f9;
+  background: var(--finance-bg);
 }
 
 html:not(.dark) body {
   background-image:
-    radial-gradient(circle at top right, rgba(37, 99, 235, 0.07), transparent 30rem),
-    linear-gradient(180deg, #f8fafc 0, #eef2f7 100%);
+    linear-gradient(rgba(40, 52, 33, 0.055) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(40, 52, 33, 0.055) 1px, transparent 1px),
+    linear-gradient(120deg, rgba(111, 125, 98, 0.16), transparent 34%),
+    linear-gradient(300deg, rgba(184, 137, 54, 0.13), transparent 32%),
+    linear-gradient(180deg, #fbfaf4 0, #f4f1e7 100%);
+  background-size: 42px 42px, 42px 42px, cover, cover, cover;
 }
 
 html:not(.dark) .shadow-soft {
-  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.09);
+  box-shadow: 0 18px 48px rgba(40, 52, 33, 0.12);
 }
 
 button,
 input,
 select {
   font: inherit;
+}
+
+::selection {
+  background: var(--finance-forest);
+  color: #ffffff;
+}
+
+.bg-blue-600,
+.hover\:bg-blue-700:hover,
+.bg-slate-900,
+.bg-emerald-950 {
+  position: relative;
+  background-color: var(--finance-forest) !important;
+}
+
+.text-blue-600,
+.text-blue-700,
+.hover\:text-blue-700:hover,
+.hover\:text-blue-600:hover,
+.dark .dark\:text-blue-300 {
+  color: var(--finance-forest) !important;
+}
+
+.bg-blue-50,
+.hover\:bg-blue-50:hover,
+.dark .dark\:bg-blue-500\/10 {
+  background-color: rgba(223, 229, 212, 0.7) !important;
+}
+
+.border-blue-600,
+.hover\:border-blue-300:hover,
+.dark .dark\:hover\:border-blue-500:hover {
+  border-color: var(--finance-moss) !important;
+}
+
+.app-shell,
+.auth-shell {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.app-shell::after,
+.auth-shell::after {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  content: "";
+  pointer-events: none;
+  background: linear-gradient(90deg, transparent, rgba(184, 137, 54, 0.085), transparent);
+  transform: translateX(-100%);
+  animation: ambient-scan 12s ease-in-out infinite;
+}
+
+.surface-card,
+.surface-nav,
+.surface-header {
+  background: rgba(255, 255, 255, 0.82);
+  backdrop-filter: blur(18px) saturate(140%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.75),
+    0 24px 70px rgba(40, 52, 33, 0.11);
+}
+
+.dark .surface-card,
+.dark .surface-nav,
+.dark .surface-header {
+  background: rgba(17, 21, 15, 0.78);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    0 24px 70px rgba(0, 0, 0, 0.32);
+}
+
+.surface-card,
+.animate-rise {
+  transition:
+    transform 0.22s ease,
+    border-color 0.22s ease,
+    box-shadow 0.22s ease;
+}
+
+.surface-card:hover,
+.animate-rise:hover {
+  border-color: rgba(111, 125, 98, 0.34);
+  transform: translateY(-2px);
+}
+
+.auth-card,
+.overview-hero {
+  position: relative;
+  overflow: hidden;
+}
+
+.auth-card::before,
+.overview-hero::before {
+  position: absolute;
+  inset: 0;
+  content: "";
+  pointer-events: none;
+  background:
+    linear-gradient(135deg, rgba(40, 52, 33, 0.1), transparent 34%),
+    linear-gradient(72deg, transparent 12%, rgba(111, 125, 98, 0.14) 32%, transparent 52%),
+    linear-gradient(308deg, transparent 20%, rgba(184, 137, 54, 0.16) 46%, transparent 72%);
+}
+
+.auth-card > *,
+.overview-hero > * {
+  position: relative;
+}
+
+.interactive-button {
+  position: relative;
+  overflow: hidden;
+}
+
+.interactive-button::after {
+  position: absolute;
+  inset: 0;
+  content: "";
+  pointer-events: none;
+  background: linear-gradient(110deg, transparent 20%, rgba(239, 228, 200, 0.38), transparent 80%);
+  transform: translateX(-120%);
+  transition: transform 0.65s ease;
+}
+
+.interactive-button:hover::after {
+  transform: translateX(120%);
+}
+
+.nav-item {
+  position: relative;
+}
+
+.finance-pill {
+  border-color: rgba(111, 125, 98, 0.35);
+  background: rgba(223, 229, 212, 0.44);
+  color: var(--finance-forest);
+}
+
+.finance-pill-muted {
+  border-color: rgba(184, 137, 54, 0.28);
+  background: rgba(239, 228, 200, 0.34);
+  color: #6f6040;
+}
+
+.capital-flow {
+  display: grid;
+  width: min(190px, 42vw);
+  gap: 5px;
+}
+
+.capital-flow span {
+  display: block;
+  height: 3px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, transparent, var(--finance-moss), var(--finance-gold), transparent);
+  background-size: 220% 100%;
+  animation: ledger-scan 2.8s ease-in-out infinite;
+}
+
+.capital-flow span:nth-child(2) {
+  width: 76%;
+  margin-left: auto;
+  animation-delay: 0.25s;
+}
+
+.capital-flow span:nth-child(3) {
+  width: 58%;
+  animation-delay: 0.5s;
+}
+
+.growth-chart {
+  position: relative;
+  overflow: hidden;
+}
+
+.growth-chart svg {
+  display: block;
+  width: 100%;
+  height: clamp(96px, 12vw, 150px);
+}
+
+.growth-chart::before {
+  position: absolute;
+  inset: 18px 0 20px 0;
+  content: "";
+  pointer-events: none;
+  background:
+    linear-gradient(rgba(40, 52, 33, 0.08) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(40, 52, 33, 0.08) 1px, transparent 1px);
+  background-size: 100% 34px, 80px 100%;
+  mask-image: linear-gradient(90deg, transparent, black 8%, black 92%, transparent);
+}
+
+.growth-path {
+  fill: none;
+  stroke: url("#growthStroke");
+  stroke-dasharray: 760;
+  stroke-dashoffset: 760;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 8;
+  filter: drop-shadow(0 10px 18px rgba(40, 52, 33, 0.16));
+  animation: draw-growth 2.2s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+}
+
+.growth-fill {
+  fill: url("#growthFill");
+  opacity: 0;
+  animation: fade-up 1.2s ease 1.2s forwards;
+}
+
+.growth-dot {
+  fill: var(--finance-moss);
+  opacity: 0;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: dot-pop 0.5s ease forwards, balance-pulse 2.6s ease-in-out infinite;
+}
+
+.growth-dot.dot-one {
+  animation-delay: 0.8s, 1.2s;
+}
+
+.growth-dot.dot-two {
+  animation-delay: 1.25s, 1.65s;
+}
+
+.growth-dot.dot-three {
+  fill: var(--finance-gold);
+  animation-delay: 1.8s, 2.2s;
+}
+
+.mini-stat {
+  position: relative;
+  overflow: hidden;
+}
+
+.mini-stat::before {
+  position: absolute;
+  inset: 0;
+  content: "";
+  opacity: 0.65;
+  background: linear-gradient(135deg, transparent, rgba(111, 125, 98, 0.13));
+}
+
+.mini-stat-expense::before {
+  background: linear-gradient(135deg, transparent, rgba(220, 38, 38, 0.07));
+}
+
+.mini-stat-wealth::before {
+  background: linear-gradient(135deg, transparent, rgba(184, 137, 54, 0.14));
+}
+
+.mini-stat > * {
+  position: relative;
+}
+
+.mini-stat div {
+  display: flex;
+  align-items: end;
+  gap: 4px;
+  height: 26px;
+  margin-top: 10px;
+}
+
+.mini-stat div span {
+  width: 100%;
+  border-radius: 999px 999px 4px 4px;
+  background: linear-gradient(180deg, #a9b39d, var(--finance-moss));
+  animation: bar-rise 2.8s ease-in-out infinite;
+}
+
+.mini-stat-expense div span {
+  background: linear-gradient(180deg, #ef4444, #dc2626);
+}
+
+.mini-stat-wealth div span {
+  background: linear-gradient(180deg, #d6b76f, var(--finance-gold));
+}
+
+.mini-stat div span:nth-child(1) {
+  height: 34%;
+}
+
+.mini-stat div span:nth-child(2) {
+  height: 58%;
+  animation-delay: 0.15s;
+}
+
+.mini-stat div span:nth-child(3) {
+  height: 42%;
+  animation-delay: 0.3s;
+}
+
+.mini-stat div span:nth-child(4) {
+  height: 78%;
+  animation-delay: 0.45s;
 }
 
 @keyframes rise {
@@ -42,6 +351,80 @@ select {
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+@keyframes ambient-scan {
+  0%,
+  48% {
+    transform: translateX(-100%);
+  }
+  78%,
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+@keyframes ledger-scan {
+  0%,
+  100% {
+    background-position: 140% 0;
+    opacity: 0.45;
+  }
+  50% {
+    background-position: 0 0;
+    opacity: 1;
+  }
+}
+
+@keyframes draw-growth {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes dot-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.4);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes balance-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.18);
+  }
+}
+
+@keyframes bar-rise {
+  0%,
+  100% {
+    transform: scaleY(0.65);
+    transform-origin: bottom;
+    opacity: 0.72;
+  }
+  50% {
+    transform: scaleY(1);
+    opacity: 1;
   }
 }
 
