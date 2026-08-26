@@ -1,5 +1,5 @@
 import { FormEvent, useState } from "react";
-import { Loader2, LockKeyhole, Mail, WalletCards } from "lucide-react";
+import { ArrowUpRight, Loader2, LockKeyhole, Mail, Target, TrendingUp, WalletCards } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { api } from "../api/client";
 
@@ -61,8 +61,8 @@ export function AuthPage() {
 
   return (
     <main className="auth-shell min-h-screen bg-slate-950 text-white">
-      <div className="grid min-h-screen lg:grid-cols-[1.1fr_0.9fr]">
-        <section className="flex flex-col justify-between px-6 py-8 sm:px-10 lg:px-16">
+      <div className="grid min-h-screen lg:grid-cols-2">
+        <section className="flex min-h-screen flex-col justify-between px-6 py-8 sm:px-10 lg:px-16">
           <div className="flex items-center gap-3 text-lg font-semibold">
             <span className="grid h-11 w-11 place-items-center rounded-lg bg-blue-500">
               <WalletCards size={24} />
@@ -75,28 +75,45 @@ export function AuthPage() {
             <p className="mt-6 max-w-xl text-lg leading-8 text-slate-300">
               Dashboard, agenda, metas, investimentos, filtros e relatorios em uma experiencia rapida, privada e organizada.
             </p>
-            <div className="mt-10 grid max-w-md grid-cols-3 gap-2">
-              <div className="signal-tile h-24 rounded-lg border border-white/10 bg-white/10 p-3">
-                <span />
-                <p>Saldo</p>
+            <div className="mt-10 grid max-w-2xl gap-3 sm:grid-cols-3">
+              <div className="signal-tile rounded-lg border border-white/10 bg-white/10 p-4">
+                <div className="mb-4 flex items-center justify-between">
+                  <p>Saldo</p>
+                  <span className="grid h-8 w-8 place-items-center rounded-lg bg-emerald-400/15 text-emerald-200">
+                    <TrendingUp size={17} />
+                  </span>
+                </div>
+                <strong>R$ 18.420</strong>
+                <small><ArrowUpRight size={14} /> +12% no mes</small>
+                <div className="signal-meter"><span style={{ width: "74%" }} /></div>
               </div>
-              <div className="signal-tile is-delayed h-24 rounded-lg border border-white/10 bg-white/10 p-3">
-                <span />
-                <p>Metas</p>
+              <div className="signal-tile is-delayed rounded-lg border border-white/10 bg-white/10 p-4">
+                <div className="mb-4 flex items-center justify-between">
+                  <p>Metas</p>
+                  <span className="grid h-8 w-8 place-items-center rounded-lg bg-amber-300/15 text-amber-100">
+                    <Target size={17} />
+                  </span>
+                </div>
+                <strong>68%</strong>
+                <small><ArrowUpRight size={14} /> +R$ 840 guardados</small>
+                <div className="signal-meter"><span style={{ width: "68%" }} /></div>
               </div>
-              <div className="signal-tile h-24 rounded-lg border border-white/10 bg-white/10 p-3">
-                <span />
-                <p>Carteira</p>
+              <div className="signal-tile rounded-lg border border-white/10 bg-white/10 p-4">
+                <div className="mb-4 flex items-center justify-between">
+                  <p>Carteira</p>
+                  <span className="grid h-8 w-8 place-items-center rounded-lg bg-blue-300/15 text-blue-100">
+                    <WalletCards size={17} />
+                  </span>
+                </div>
+                <strong>CDI 10.5%</strong>
+                <small><ArrowUpRight size={14} /> renda fixa em alta</small>
+                <div className="signal-meter"><span style={{ width: "82%" }} /></div>
               </div>
             </div>
-            <div className="finance-ticker mt-4 max-w-md rounded-lg border border-white/10 bg-white/10 py-2 text-xs font-medium text-amber-100">
-              <div>
-                <span>Receita +12%</span>
-                <span>Reserva 68%</span>
-                <span>CDI 10.5%</span>
-                <span>Meta +R$ 840</span>
-                <span>Receita +12%</span>
-                <span>Reserva 68%</span>
+            <div className="finance-ticker mt-5 max-w-2xl rounded-lg border border-white/10 bg-white/10 py-3 text-xs font-semibold text-amber-100">
+              <div className="finance-ticker-track">
+                {tickerItems.map((item) => <span key={item}>{item}</span>)}
+                {tickerItems.map((item) => <span key={`${item}-copy`}>{item}</span>)}
               </div>
             </div>
           </div>
@@ -110,7 +127,7 @@ export function AuthPage() {
           </div>
         </section>
 
-        <section className="flex items-center justify-center bg-slate-50 px-6 py-10 text-slate-950 dark:bg-slate-900 dark:text-white">
+        <section className="flex min-h-screen items-center justify-center bg-slate-50 px-6 py-10 text-slate-950 dark:bg-slate-900 dark:text-white">
           <form onSubmit={onSubmit} className="auth-card w-full max-w-md rounded-lg border border-slate-200 bg-white p-6 shadow-soft dark:border-slate-800 dark:bg-slate-950">
             <div className="mb-6 flex items-center gap-3">
               <span className="grid h-10 w-10 place-items-center rounded-lg bg-blue-100 text-blue-700 dark:bg-blue-500/15 dark:text-blue-300">
@@ -154,6 +171,19 @@ export function AuthPage() {
     </main>
   );
 }
+
+const tickerItems = [
+  "Receita +12%",
+  "Reserva 68%",
+  "CDI 10.5%",
+  "Meta +R$ 840",
+  "Cartao -R$ 320",
+  "Aportes +R$ 1.200",
+  "Fatura em 5 dias",
+  "Investimentos +2.8%",
+  "Economia +R$ 460",
+  "Pix agendado"
+];
 
 function Field({ name, label, placeholder, type = "text" }: { name: string; label: string; placeholder: string; type?: string }) {
   return (
