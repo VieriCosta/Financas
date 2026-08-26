@@ -1,4 +1,4 @@
-import { createContext, ReactNode, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, ReactNode, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../api/client";
 import { User } from "../types/finance";
 
@@ -16,13 +16,17 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState<User | null>(null);
+  const sessionVersion = useRef(0);
 
   function persistSession(data: { user: User; csrfToken: string }) {
+    sessionVersion.current += 1;
     sessionStorage.setItem("finance.csrf", data.csrfToken);
+    localStorage.setItem("finance.user", JSON.stringify(data.user));
     setUser(data.user);
   }
 
   function clearSession() {
+    sessionVersion.current += 1;
     sessionStorage.removeItem("finance.csrf");
     sessionStorage.removeItem("finance.token");
     sessionStorage.removeItem("finance.user");
@@ -32,9 +36,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   useEffect(() => {
+    const version = sessionVersion.current;
     api.get("/auth/session")
       .then(({ data }) => persistSession(data))
-      .catch(clearSession)
+      .catch(() => {
+        if (sessionVersion.current === version) {
+          clearSession();
+        }
+      })
       .finally(() => setLoading(false));
   }, []);
 
