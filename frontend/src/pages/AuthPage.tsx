@@ -1,5 +1,5 @@
 import { FormEvent, useState } from "react";
-import { ArrowUpRight, Loader2, LockKeyhole, Mail, Target, TrendingUp, WalletCards } from "lucide-react";
+import { ArrowRight, ArrowUpRight, BarChart3, Fingerprint, Loader2, LockKeyhole, Mail, Orbit, ShieldCheck, Sparkles, WalletCards } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { api } from "../api/client";
 
@@ -7,7 +7,6 @@ type AuthMode = "login" | "register" | "forgot" | "reset";
 
 export function AuthPage() {
   const { login, register } = useAuth();
-  const currentYear = new Date().getFullYear();
   const resetToken = new URLSearchParams(window.location.search).get("resetToken");
   const [mode, setMode] = useState<AuthMode>(resetToken ? "reset" : "login");
   const [loading, setLoading] = useState(false);
@@ -28,10 +27,7 @@ export function AuthPage() {
         const { data } = await api.post("/auth/forgot-password", { email: form.get("email") });
         setMessage(data.resetUrl ? `SMTP nao configurado. Link de teste: ${data.resetUrl}` : "Se o e-mail existir, enviaremos um link para redefinir sua senha.");
       } else if (mode === "reset") {
-        await api.post("/auth/reset-password", {
-          token: resetToken,
-          password: form.get("password")
-        });
+        await api.post("/auth/reset-password", { token: resetToken, password: form.get("password") });
         window.history.replaceState({}, "", window.location.pathname);
         setMode("login");
         setMessage("Senha alterada com sucesso. Entre com a nova senha.");
@@ -46,156 +42,89 @@ export function AuthPage() {
   }
 
   const title = {
-    login: "Entrar",
-    register: "Criar conta",
-    forgot: "Recuperar senha",
-    reset: "Alterar senha"
+    login: "Bem-vindo de volta",
+    register: "Crie seu espaço",
+    forgot: "Recuperar acesso",
+    reset: "Nova senha"
   }[mode];
 
   const description = {
-    login: "Acesso privado ao seu painel financeiro.",
-    register: "Crie seu acesso privado.",
-    forgot: "Informe seu e-mail para receber o link.",
-    reset: "Defina uma nova senha para sua conta."
+    login: "Seu próximo passo financeiro começa aqui.",
+    register: "Tudo que você precisa para tomar decisões melhores.",
+    forgot: "Enviaremos um link para o seu e-mail.",
+    reset: "Escolha uma nova senha para sua conta."
   }[mode];
 
   return (
-    <main className="auth-shell min-h-screen bg-slate-950 text-white">
-      <div className="grid min-h-screen lg:grid-cols-2">
-        <section className="flex min-h-screen flex-col justify-between px-6 py-8 sm:px-10 lg:px-16">
-          <div className="flex items-center gap-3 text-lg font-semibold">
-            <span className="grid h-11 w-11 place-items-center rounded-lg bg-blue-500">
-              <WalletCards size={24} />
-            </span>
-            Financas Pessoais
+    <main className="auth-shell min-h-screen text-white">
+      <div className="auth-layout min-h-screen">
+        <section className="auth-showcase">
+          <div className="auth-brand" aria-label="Finanças Pessoais">
+            <span className="brand-mark"><WalletCards size={24} strokeWidth={2.2} /></span>
+            <span>finanças<span className="brand-dot">.</span></span>
           </div>
-          <div className="max-w-2xl py-12">
-            <p className="mb-4 text-sm font-semibold uppercase tracking-[0.2em] text-blue-300">Private finance OS</p>
-            <h1 className="text-4xl font-semibold leading-tight sm:text-5xl lg:text-6xl">Controle sua vida financeira com clareza.</h1>
-            <p className="mt-6 max-w-xl text-lg leading-8 text-slate-300">
-              Dashboard, agenda, metas, investimentos, filtros e relatorios em uma experiencia rapida, privada e organizada.
-            </p>
-            <div className="mt-10 grid max-w-2xl gap-3 sm:grid-cols-3">
-              <div className="signal-tile rounded-lg border border-white/10 bg-white/10 p-4">
-                <div className="mb-4 flex items-center justify-between">
-                  <p>Saldo</p>
-                  <span className="grid h-8 w-8 place-items-center rounded-lg bg-emerald-400/15 text-emerald-200">
-                    <TrendingUp size={17} />
-                  </span>
-                </div>
-                <strong>R$ 18.420</strong>
-                <small><ArrowUpRight size={14} /> +12% no mes</small>
-                <div className="signal-meter"><span style={{ width: "74%" }} /></div>
-              </div>
-              <div className="signal-tile is-delayed rounded-lg border border-white/10 bg-white/10 p-4">
-                <div className="mb-4 flex items-center justify-between">
-                  <p>Metas</p>
-                  <span className="grid h-8 w-8 place-items-center rounded-lg bg-amber-300/15 text-amber-100">
-                    <Target size={17} />
-                  </span>
-                </div>
-                <strong>68%</strong>
-                <small><ArrowUpRight size={14} /> +R$ 840 guardados</small>
-                <div className="signal-meter"><span style={{ width: "68%" }} /></div>
-              </div>
-              <div className="signal-tile rounded-lg border border-white/10 bg-white/10 p-4">
-                <div className="mb-4 flex items-center justify-between">
-                  <p>Carteira</p>
-                  <span className="grid h-8 w-8 place-items-center rounded-lg bg-blue-300/15 text-blue-100">
-                    <WalletCards size={17} />
-                  </span>
-                </div>
-                <strong>CDI 10.5%</strong>
-                <small><ArrowUpRight size={14} /> renda fixa em alta</small>
-                <div className="signal-meter"><span style={{ width: "82%" }} /></div>
-              </div>
+
+          <div className="auth-story">
+            <div className="eyebrow"><span className="live-pulse" /> SUA VIDA FINANCEIRA, EM OUTRA ÓRBITA</div>
+            <h1>O futuro do seu dinheiro <span>começa com clareza.</span></h1>
+            <p>Transforme números em direção. Planeje, acompanhe e evolua com um espaço criado para decisões mais inteligentes.</p>
+
+            <div className="auth-visual" aria-hidden="true">
+              <div className="visual-grid" />
+              <div className="visual-orbit orbit-one" />
+              <div className="visual-orbit orbit-two" />
+              <div className="visual-core"><Orbit size={43} strokeWidth={1.3} /></div>
+              <div className="visual-float visual-float-top"><BarChart3 size={17} /><span>Visão completa</span><ArrowUpRight size={14} /></div>
+              <div className="visual-float visual-float-bottom"><Sparkles size={17} /><span>Próximas decisões</span></div>
+              <div className="visual-node node-one" /><div className="visual-node node-two" /><div className="visual-node node-three" />
             </div>
-            <div className="finance-ticker mt-5 max-w-2xl rounded-lg border border-white/10 bg-white/10 py-3 text-xs font-semibold text-amber-100">
-              <div className="finance-ticker-track">
-                {tickerItems.map((item) => <span key={item}>{item}</span>)}
-                {tickerItems.map((item) => <span key={`${item}-copy`}>{item}</span>)}
-              </div>
+
+            <div className="auth-features">
+              <span><BarChart3 size={17} /> Dados em perspectiva</span>
+              <span><ShieldCheck size={17} /> Seu espaço privado</span>
+              <span><Sparkles size={17} /> Inteligência para agir</span>
             </div>
           </div>
-          <div className="flex flex-col gap-3 text-xs text-slate-400 sm:flex-row sm:items-center sm:justify-between">
-            <span>&copy; {currentYear} Financas Pessoais. Todos os direitos reservados.</span>
-            <div className="flex flex-wrap gap-x-5 gap-y-2">
-              <span>Privacidade</span>
-              <span>Termos de uso</span>
-              <span>Seguranca</span>
-            </div>
-          </div>
+
+          <div className="auth-showcase-footer"><span>FINANÇAS PESSOAIS <span className="footer-divider">/</span> {new Date().getFullYear()}</span><span>CONTROLE. VISÃO. FUTURO.</span></div>
         </section>
 
-        <section className="flex min-h-screen items-center justify-center bg-slate-50 px-6 py-10 text-slate-950 dark:bg-slate-900 dark:text-white">
-          <form onSubmit={onSubmit} className="auth-card w-full max-w-md rounded-lg border border-slate-200 bg-white p-6 shadow-soft dark:border-slate-800 dark:bg-slate-950">
-            <div className="mb-6 flex items-center gap-3">
-              <span className="grid h-10 w-10 place-items-center rounded-lg bg-blue-100 text-blue-700 dark:bg-blue-500/15 dark:text-blue-300">
-                <LockKeyhole size={20} />
-              </span>
-              <div>
-                <h2 className="text-xl font-semibold">{title}</h2>
-                <p className="text-sm text-slate-500">{description}</p>
-              </div>
-            </div>
+        <section className="auth-form-side">
+          <div className="auth-form-top"><span className="live-pulse" /> AMBIENTE SEGURO <Fingerprint size={18} /></div>
+          <form onSubmit={onSubmit} className="auth-card">
+            <div className="auth-card-icon"><LockKeyhole size={23} /></div>
+            <div className="auth-form-heading"><span>ACESSO À PLATAFORMA</span><h2>{title}<span className="brand-dot">.</span></h2><p>{description}</p></div>
 
             {mode === "register" && <Field name="name" label="Nome" placeholder="Seu nome" />}
             {mode !== "reset" && <Field name="email" label="E-mail" placeholder="voce@email.com" type="email" />}
-            {mode !== "forgot" && <Field name="password" label={mode === "reset" ? "Nova senha" : "Senha"} placeholder="Minimo 8 caracteres" type="password" />}
+            {mode !== "forgot" && <Field name="password" label={mode === "reset" ? "Nova senha" : "Senha"} placeholder="Mínimo 8 caracteres" type="password" autoComplete={mode === "login" ? "current-password" : "new-password"} />}
 
-            {error && <p className="mb-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-500/10 dark:text-red-300">{error}</p>}
-            {message && <p className="mb-4 rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300">{message}</p>}
+            {error && <p className="auth-feedback auth-error" role="alert">{error}</p>}
+            {message && <p className="auth-feedback auth-success" role="status">{message}</p>}
 
-            <button className="interactive-button flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-blue-600 font-semibold text-white transition hover:bg-blue-700" disabled={loading}>
+            <button className="auth-submit" disabled={loading}>
               {loading && <Loader2 className="animate-spin" size={18} />}
-              {mode === "login" && "Acessar dashboard"}
-              {mode === "register" && "Cadastrar"}
+              {mode === "login" && "Entrar no painel"}
+              {mode === "register" && "Criar minha conta"}
               {mode === "forgot" && <><Mail size={18} /> Enviar link</>}
               {mode === "reset" && "Alterar senha"}
+              {!loading && <ArrowRight size={19} />}
             </button>
 
-            <div className="mt-4 grid gap-2 text-center text-sm">
-              {mode === "login" && (
-                <>
-                  <button type="button" onClick={() => setMode("forgot")} className="font-medium text-slate-500 hover:text-blue-600 dark:text-slate-400 dark:hover:text-blue-300">Esqueceu sua senha?</button>
-                  <button type="button" onClick={() => setMode("register")} className="font-medium text-blue-600 dark:text-blue-300">Ainda nao tenho conta</button>
-                </>
-              )}
-              {mode !== "login" && (
-                <button type="button" onClick={() => setMode("login")} className="font-medium text-blue-600 dark:text-blue-300">Voltar para entrar</button>
-              )}
+            <div className="auth-links">
+              {mode === "login" ? <>
+                <button type="button" onClick={() => setMode("forgot")}>Esqueceu sua senha?</button>
+                <button type="button" onClick={() => setMode("register")}>Ainda não tem uma conta? <strong>Cadastre-se <ArrowUpRight size={15} /></strong></button>
+              </> : <button type="button" onClick={() => setMode("login")}>Voltar para entrar <ArrowRight size={15} /></button>}
             </div>
           </form>
+          <p className="auth-form-footer"><ShieldCheck size={16} /> Seus dados financeiros, sob seu controle.</p>
         </section>
       </div>
     </main>
   );
 }
 
-const tickerItems = [
-  "Receita +12%",
-  "Reserva 68%",
-  "CDI 10.5%",
-  "Meta +R$ 840",
-  "Cartao -R$ 320",
-  "Aportes +R$ 1.200",
-  "Fatura em 5 dias",
-  "Investimentos +2.8%",
-  "Economia +R$ 460",
-  "Pix agendado"
-];
-
-function Field({ name, label, placeholder, type = "text" }: { name: string; label: string; placeholder: string; type?: string }) {
-  return (
-    <label className="mb-4 block text-sm font-medium">
-      {label}
-      <input
-        required
-        name={name}
-        type={type}
-        placeholder={placeholder}
-        className="mt-2 h-11 w-full rounded-lg border border-slate-200 bg-white px-3 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 dark:border-slate-800 dark:bg-slate-900"
-      />
-    </label>
-  );
+function Field({ name, label, placeholder, type = "text", autoComplete }: { name: string; label: string; placeholder: string; type?: string; autoComplete?: string }) {
+  return <label className="auth-field">{label}<input required name={name} type={type} placeholder={placeholder} minLength={type === "password" ? 8 : undefined} autoComplete={autoComplete ?? (name === "email" ? "email" : "name")} /></label>;
 }

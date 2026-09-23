@@ -35,6 +35,7 @@ import {
   Plus,
   ReceiptText,
   Search,
+  Sparkles,
   ShieldCheck,
   SlidersHorizontal,
   Save,
@@ -110,7 +111,7 @@ export function DashboardPage() {
   const [tags, setTags] = useState<Tag[]>([]);
   const [preference, setPreference] = useState<DashboardPreference>({ hiddenWidgets: [], widgetOrder: ["metrics", "charts", "alerts", "bills", "goals"], chartMonths: 6 });
   const [activeView, setActiveView] = useState<ViewKey>("overview");
-  const [dark, setDark] = useState(() => localStorage.getItem("finance.theme") === "dark");
+  const [dark, setDark] = useState(() => localStorage.getItem("finance.theme") !== "light");
   const [loading, setLoading] = useState(true);
   const [filters, setFilters] = useState({ month: String(new Date().getMonth() + 1), type: "", search: "", categoryId: "", tagId: "", minAmount: "", maxAmount: "" });
   const [transactionsPage, setTransactionsPage] = useState(emptyTransactions);
@@ -425,27 +426,28 @@ export function DashboardPage() {
   }
 
   return (
-    <main className="app-shell min-h-screen bg-slate-100 text-slate-950 transition-colors dark:bg-slate-950 dark:text-white">
+    <main className="app-shell min-h-screen transition-colors">
       {toast && <ToastMessage toast={toast} />}
-      <aside className="surface-nav fixed inset-y-0 left-0 z-20 hidden w-64 border-r border-slate-300 bg-white/95 shadow-sm backdrop-blur dark:border-slate-800 dark:bg-slate-950/95 lg:block">
-        <div className="flex h-20 items-center gap-3 px-5 text-blue-600">
-          <span className="grid h-11 w-11 place-items-center rounded-lg bg-blue-600 text-white">
+      <aside className="surface-nav fixed inset-y-0 left-0 z-20 hidden w-64 lg:block">
+        <div className="sidebar-brand flex h-24 items-center gap-3 px-5">
+          <span className="brand-mark grid h-11 w-11 place-items-center">
             <WalletCards size={22} />
           </span>
           <div>
-            <p className="font-semibold text-slate-950 dark:text-white">Financas</p>
-            <p className="text-xs text-slate-500 dark:text-slate-400">Painel pessoal</p>
+            <p className="sidebar-brand-name font-semibold">finanças<span className="brand-dot">.</span></p>
+            <p className="sidebar-brand-caption text-xs">Seu espaço financeiro</p>
           </div>
         </div>
-        <nav className="grid gap-2 px-3">
+        <p className="sidebar-label">WORKSPACE</p>
+        <nav className="grid gap-1 px-3" aria-label="Navegação principal">
           {menuItems.map((item) => (
             <button
               key={item.key}
               onClick={() => setActiveView(item.key)}
-              className={`flex h-12 items-center gap-3 rounded-lg px-3 text-sm font-medium transition ${
+              className={`nav-item flex h-12 items-center gap-3 rounded-lg px-3 text-sm font-medium transition ${
                 activeView === item.key
-                  ? "bg-blue-600 text-white shadow-sm"
-                  : "text-slate-500 hover:bg-blue-50 hover:text-blue-700 dark:text-slate-400 dark:hover:bg-blue-500/10 dark:hover:text-blue-300"
+                  ? "nav-item-active"
+                  : "nav-item-idle"
               }`}
               title={item.label}
             >
@@ -454,45 +456,50 @@ export function DashboardPage() {
             </button>
           ))}
         </nav>
+        <div className="sidebar-foot">
+          <span className="sidebar-foot-icon"><Sparkles size={17} /></span>
+          <div><strong>Decida com clareza</strong><p>Seu futuro começa nos detalhes de hoje.</p></div>
+        </div>
       </aside>
 
       <section className="lg:pl-64">
-        <header className="surface-header sticky top-0 z-10 border-b border-slate-300 bg-white/90 px-4 py-4 shadow-sm backdrop-blur dark:border-slate-800 dark:bg-slate-950/85 dark:shadow-none sm:px-6">
+        <header className="surface-header sticky top-0 z-10 px-4 py-4 sm:px-6">
           <div className="mx-auto flex max-w-7xl items-center justify-between gap-3">
             <div>
-              <p className="text-sm text-slate-500 dark:text-slate-400">Ola, {user?.name}</p>
-              <h1 className="text-2xl font-semibold">{viewTitles[activeView].title}</h1>
+              <p className="header-kicker">SEU CENTRO DE CONTROLE <span>/</span> Olá, {user?.name}</p>
+              <h1 className="header-title text-2xl font-semibold">{viewTitles[activeView].title}<span className="brand-dot">.</span></h1>
               <p className="hidden text-sm text-slate-500 dark:text-slate-400 sm:block">
                 {viewTitles[activeView].subtitle}
                 {refreshing && <span className="ml-2 text-blue-600 dark:text-blue-300">Atualizando...</span>}
               </p>
             </div>
-            <div className="flex items-center gap-2">
-              <button onClick={exportPdf} className="grid h-10 w-10 place-items-center rounded-lg border border-slate-200 bg-white text-slate-700 shadow-sm dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200" title="Exportar PDF">
+            <div className="header-actions flex items-center gap-2">
+              <span className="header-status"><span className="live-pulse" /> PAINEL ATIVO</span>
+              <button onClick={exportPdf} className="header-icon-button grid h-10 w-10 place-items-center" title="Exportar PDF" aria-label="Exportar PDF">
                 <Download size={18} />
               </button>
-              <button onClick={() => setDark((value) => !value)} className="grid h-10 w-10 place-items-center rounded-lg border border-slate-200 bg-white text-slate-700 shadow-sm dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200" title="Alternar tema">
+              <button onClick={() => setDark((value) => !value)} className="header-icon-button grid h-10 w-10 place-items-center" title="Alternar tema" aria-label="Alternar tema">
                 {dark ? <Sun size={18} /> : <Moon size={18} />}
               </button>
-              <button onClick={() => setActiveView("profile")} className={`grid h-10 w-10 place-items-center rounded-lg border shadow-sm transition ${
+              <button onClick={() => setActiveView("profile")} className={`header-icon-button grid h-10 w-10 place-items-center transition ${
                 activeView === "profile"
-                  ? "border-blue-600 bg-blue-600 text-white"
-                  : "border-slate-200 bg-white text-slate-700 hover:border-blue-300 hover:text-blue-700 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:hover:border-blue-500 dark:hover:text-blue-300"
+                  ? "header-icon-active"
+                  : ""
               }`} title="Meu perfil">
                 <UserRound size={18} />
               </button>
-              <button onClick={() => void logout()} className="grid h-10 w-10 place-items-center rounded-lg bg-slate-900 text-white dark:bg-white dark:text-slate-950" title="Sair">
+              <button onClick={() => void logout()} className="header-icon-button grid h-10 w-10 place-items-center" title="Sair" aria-label="Sair">
                 <LogOut size={18} />
               </button>
             </div>
           </div>
-          <div className="mt-4 flex gap-2 overflow-x-auto lg:hidden">
+          <div className="mobile-nav mt-4 flex gap-2 overflow-x-auto lg:hidden">
             {menuItems.map((item) => (
               <button
                 key={item.key}
                 onClick={() => setActiveView(item.key)}
                 className={`flex h-10 shrink-0 items-center gap-2 rounded-lg px-3 text-sm font-medium ${
-                  activeView === item.key ? "bg-blue-600 text-white" : "bg-white text-slate-600 dark:bg-slate-900 dark:text-slate-300"
+                  activeView === item.key ? "mobile-nav-active" : "mobile-nav-idle"
                 }`}
               >
                 {item.icon}
@@ -502,7 +509,7 @@ export function DashboardPage() {
           </div>
         </header>
 
-        <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6">
+        <div className="dashboard-content mx-auto max-w-7xl px-4 py-6 sm:px-6">
           {activeView === "overview" && <Overview dashboard={dashboard} preference={preference} onBillStatusChange={updateBillStatus} />}
           {activeView === "transactions" && (
             <TransactionsView
@@ -544,28 +551,29 @@ function Overview({ dashboard, preference, onBillStatusChange }: { dashboard: Da
   return (
     <div className="grid gap-5">
       {!hidden.has("metrics") && (
-        <section className="overview-hero surface-card animate-rise grid gap-6 rounded-xl border border-slate-300 p-6 dark:border-slate-800 xl:grid-cols-[1fr_0.72fr]">
+        <section className="overview-hero surface-card animate-rise grid gap-6 rounded-xl p-6 xl:grid-cols-[1fr_0.72fr]">
           <div>
             <div className="flex flex-wrap items-center justify-between gap-3">
-              <p className="text-sm text-slate-500 dark:text-slate-400">Saldo disponivel</p>
+              <p className="hero-kicker"><span className="live-pulse" /> VISÃO GERAL <span className="hero-kicker-divider">/</span> SALDO DISPONÍVEL</p>
               <div className="capital-flow" aria-hidden="true">
                 <span />
                 <span />
                 <span />
               </div>
             </div>
-            <strong className="mt-3 block text-4xl font-semibold tracking-normal sm:text-5xl">{money(dashboard.cards.balance)}</strong>
+            <strong className="hero-balance mt-3 block text-4xl font-semibold sm:text-5xl">{money(dashboard.cards.balance)}</strong>
+            <p className="hero-description">Seu dinheiro em perspectiva. Acompanhe hoje, planeje o amanhã.</p>
             <div className="growth-chart mt-7 max-w-2xl" aria-hidden="true">
               <svg viewBox="0 0 640 150" role="presentation">
                 <defs>
                   <linearGradient id="growthStroke" x1="0" x2="1" y1="0" y2="0">
-                    <stop offset="0%" stopColor="#6f7d62" />
-                    <stop offset="68%" stopColor="#283421" />
-                    <stop offset="100%" stopColor="#b88936" />
+                    <stop offset="0%" stopColor="#22d3ee" />
+                    <stop offset="68%" stopColor="#5eead4" />
+                    <stop offset="100%" stopColor="#a3e635" />
                   </linearGradient>
                   <linearGradient id="growthFill" x1="0" x2="0" y1="0" y2="1">
-                    <stop offset="0%" stopColor="#6f7d62" stopOpacity="0.18" />
-                    <stop offset="100%" stopColor="#6f7d62" stopOpacity="0" />
+                    <stop offset="0%" stopColor="#22d3ee" stopOpacity="0.26" />
+                    <stop offset="100%" stopColor="#22d3ee" stopOpacity="0" />
                   </linearGradient>
                 </defs>
                 <path className="growth-fill" d="M16 116 C78 78 118 80 166 93 C226 111 252 52 311 65 C369 78 392 98 448 61 C505 23 558 43 624 18 L624 138 L16 138 Z" />
@@ -607,16 +615,16 @@ function Overview({ dashboard, preference, onBillStatusChange }: { dashboard: Da
               <AreaChart data={dashboard.monthlySeries.slice(-preference.chartMonths)}>
                 <defs>
                   <linearGradient id="income" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#6f7d62" stopOpacity={0.22} />
-                    <stop offset="95%" stopColor="#6f7d62" stopOpacity={0} />
+                    <stop offset="5%" stopColor="#22d3ee" stopOpacity={0.26} />
+                    <stop offset="95%" stopColor="#22d3ee" stopOpacity={0} />
                   </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                <CartesianGrid strokeDasharray="3 3" stroke="#263449" />
                 <XAxis dataKey="month" />
                 <YAxis />
                 <Tooltip formatter={(value) => money(Number(value))} />
-                <Area type="monotone" dataKey="receitas" stroke="#6f7d62" fill="url(#income)" strokeWidth={3} />
-                <Area type="monotone" dataKey="despesas" stroke="#b88936" fill="#efe4c8" strokeWidth={3} />
+                <Area type="monotone" dataKey="receitas" stroke="#22d3ee" fill="url(#income)" strokeWidth={3} />
+                <Area type="monotone" dataKey="despesas" stroke="#a78bfa" fill="#a78bfa22" strokeWidth={3} />
               </AreaChart>
             </ResponsiveContainer>
           </div>
@@ -628,7 +636,7 @@ function Overview({ dashboard, preference, onBillStatusChange }: { dashboard: Da
               <PieChart>
                 <Pie data={dashboard.categorySummary} dataKey="value" nameKey="name" outerRadius={110} label>
                   {dashboard.categorySummary.map((entry) => (
-                    <Cell key={entry.name} fill={entry.color ?? "#6f7d62"} />
+                    <Cell key={entry.name} fill={entry.color ?? "#22d3ee"} />
                   ))}
                 </Pie>
                 <Tooltip formatter={(value) => money(Number(value))} />
@@ -656,7 +664,7 @@ function Overview({ dashboard, preference, onBillStatusChange }: { dashboard: Da
 
 function MiniStat({ label, value, tone }: { label: string; value: string; tone: "income" | "expense" | "wealth" }) {
   return (
-    <div className={`mini-stat mini-stat-${tone} rounded-lg border border-white/70 bg-white/55 p-3 dark:border-white/10 dark:bg-white/5`}>
+    <div className={`mini-stat mini-stat-${tone} rounded-lg p-3`}>
       <p className="text-xs text-slate-500 dark:text-slate-400">{label}</p>
       <strong className="mt-1 block text-base font-semibold">{value}</strong>
       <div aria-hidden="true">
@@ -1765,7 +1773,7 @@ function Metric({ title, value, icon, tone }: { title: string; value: string; ic
     slate: "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200"
   };
   return (
-    <article className="animate-rise rounded-xl border border-slate-300 bg-white p-5 shadow-soft dark:rounded-lg dark:border-slate-800 dark:bg-slate-900">
+    <article className={`metric-card metric-${tone} animate-rise rounded-xl p-5`}>
       <div className={`mb-6 grid h-11 w-11 place-items-center rounded-lg ${tones[tone]}`}>{icon}</div>
       <p className="text-sm text-slate-500 dark:text-slate-400">{title}</p>
       <strong className="mt-2 block text-2xl font-semibold">{value}</strong>
@@ -1775,8 +1783,8 @@ function Metric({ title, value, icon, tone }: { title: string; value: string; ic
 
 function Panel({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <section className="animate-rise rounded-xl border border-slate-300 bg-white p-5 shadow-soft dark:rounded-lg dark:border-slate-800 dark:bg-slate-900">
-      <h2 className="mb-5 text-lg font-semibold">{title}</h2>
+    <section className="surface-panel animate-rise rounded-xl p-5">
+      <h2 className="panel-title mb-5 text-lg font-semibold">{title}</h2>
       {children}
     </section>
   );
