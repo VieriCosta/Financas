@@ -106,7 +106,7 @@ export async function getRecurringRules(req: Request, res: Response) {
 export async function createRecurringRule(req: Request, res: Response) {
   const data = recurringRuleDto.parse(req.body);
   if (data.categoryId && data.transactionType) await ensureCategoryOwnership(req.userId, data.categoryId, data.transactionType);
-  return res.status(201).json(await prisma.recurringRule.create({ data: { ...data, userId: req.userId } }));
+  return res.status(201).json(await prisma.recurringRule.create({ data: { ...data, dayOfMonth: data.dayOfMonth ?? data.nextRunAt.getUTCDate(), userId: req.userId } }));
 }
 
 export async function deleteRecurringRule(req: Request, res: Response) {

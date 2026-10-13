@@ -1,4 +1,5 @@
-import crypto from "node:crypto";
+import { Prisma } from "@prisma/client";
+import { isDeepStrictEqual } from "node:util";
 import jwt from "jsonwebtoken";
 import { z } from "zod";
 import { env } from "../config/env.js";
@@ -6,7 +7,7 @@ import { prisma } from "../config/prisma.js";
 import { billDto, goalDto, investmentDto, transactionDto } from "../dtos/finance.dto.js";
 import { AppError } from "../utils/AppError.js";
 import { getDashboard } from "./finance.service.js";
-import { audit } from "./insights.service.js";
+
 
 const nullableString = z.string().nullable();
 const nullableNumber = z.number().nullable();
@@ -43,7 +44,7 @@ const previewSchema = z.object({
   actions: z.array(actionSchema).max(10)
 });
 type ConfirmationPayload = { sub: string; purpose: "ai-command"; historyId: string; actions: AiAction[] };
-const consumedConfirmations = new Map<string, number>();
+
 
 export async function askFinancialAdvice(userId: string, message: string) {
   const context = await getFinancialContext(userId);
@@ -113,56 +114,62 @@ export async function confirmFinancialCommand(userId: string, confirmationToken:
     throw new AppError("Confirmacao expirada ou invalida. Gere uma nova proposta.", 400);
   }
   if (payload.sub !== userId || payload.purpose !== "ai-command") throw new AppError("Confirmacao invalida para este usuario.", 403);
-  consumeConfirmationToken(confirmationToken);
   const actions = z.array(actionSchema).min(1).max(10).parse(payload.actions);
-  await Promise.all(actions.map((action) => validateActionForUser(userId, action)));
-  actions.forEach(validateActionPayload);
-  const results = [];
-  for (const action of actions) results.push(await executeAction(userId, action));
-  for (const action of actions) await audit(userId, `AI_${action.operation}`, action.resource, action.targetId ?? undefined);
-  await prisma.aiHistory.updateMany({ where: { id: payload.historyId, userId }, data: { status: "CONFIRMED" } });
-  return { count: results.length, results };
+  return prisma.$transaction(async tx => {
+    await tx.$queryRaw`SELECT id FROM "AiHistory" WHERE id = ${payload.historyId} AND "userId" = ${userId} FOR UPDATE`;
+    const history = await tx.aiHistory.findFirst({ where: { id: payload.historyId, userId, status: "PENDING", kind: "COMMAND" } });
+    if (!history || !isDeepStrictEqual(history.actionJson, actions)) throw new AppError("Proposta invalida ou ja confirmada.", 409);
+    for (const action of actions) { await validateActionForUser(userId, action, tx); validateActionPayload(action); }
+    const results = [];
+    for (const action of actions) {
+      results.push(await executeAction(userId, action, tx));
+      await tx.auditLog.create({ data: { userId, action: `AI_${action.operation}`, resource: action.resource, resourceId: action.targetId ?? undefined } });
+    }
+    await tx.aiHistory.update({ where: { id: history.id }, data: { status: "CONFIRMED" } });
+    return { count: results.length, results };
+  });
 }
 
-async function executeAction(userId: string, action: AiAction) {
+async function executeAction(userId: string, action: AiAction, db: Prisma.TransactionClient) {
   if (action.operation === "DELETE") {
     if (!action.targetId) throw new AppError("Registro nao informado para exclusao.", 400);
-    if (action.resource === "TRANSACTION") return prisma.transaction.delete({ where: { id: action.targetId } });
-    if (action.resource === "BILL") return prisma.bill.delete({ where: { id: action.targetId } });
-    if (action.resource === "INVESTMENT") return prisma.investment.delete({ where: { id: action.targetId } });
-    return prisma.goal.delete({ where: { id: action.targetId } });
+    if (action.resource === "TRANSACTION") return db.transaction.delete({ where: { id: action.targetId } });
+    if (action.resource === "BILL") return db.bill.delete({ where: { id: action.targetId } });
+    if (action.resource === "INVESTMENT") return db.investment.delete({ where: { id: action.targetId } });
+    return db.goal.delete({ where: { id: action.targetId } });
   }
 
   const fields = withoutNulls(action);
   if (action.operation === "UPDATE") {
     if (!action.targetId) throw new AppError("Registro nao informado para edicao.", 400);
-    if (action.resource === "TRANSACTION") return prisma.transaction.update({ where: { id: action.targetId }, data: transactionDto.partial().parse(fields) });
-    if (action.resource === "BILL") return prisma.bill.update({ where: { id: action.targetId }, data: billDto.partial().parse(fields) });
-    if (action.resource === "INVESTMENT") return prisma.investment.update({ where: { id: action.targetId }, data: investmentDto.partial().parse(fields) });
-    return prisma.goal.update({ where: { id: action.targetId }, data: goalDto.partial().parse(fields) });
+    if (action.resource === "TRANSACTION") return db.transaction.update({ where: { id: action.targetId }, data: transactionDto.partial().parse(fields) });
+    if (action.resource === "BILL") return db.bill.update({ where: { id: action.targetId }, data: { ...billDto.partial().parse(fields), ...(action.status ? { paidAt: action.status === "PAID" ? new Date() : null } : {}) } });
+    if (action.resource === "INVESTMENT") return db.investment.update({ where: { id: action.targetId }, data: investmentDto.partial().parse(fields) });
+    return db.goal.update({ where: { id: action.targetId }, data: goalDto.partial().parse(fields) });
   }
 
-  if (action.resource === "TRANSACTION") return prisma.transaction.create({ data: { ...transactionDto.parse(fields), userId } });
-  if (action.resource === "BILL") return prisma.bill.create({ data: { ...billDto.parse(fields), userId } });
-  if (action.resource === "INVESTMENT") return prisma.investment.create({ data: { ...investmentDto.parse(fields), userId } });
-  return prisma.goal.create({ data: { ...goalDto.parse(fields), userId } });
+  if (action.resource === "TRANSACTION") return db.transaction.create({ data: { ...transactionDto.parse(fields), userId } });
+  if (action.resource === "BILL") return db.bill.create({ data: { ...billDto.parse(fields), paidAt: action.status === "PAID" ? new Date() : null, userId } });
+  if (action.resource === "INVESTMENT") return db.investment.create({ data: { ...investmentDto.parse(fields), userId } });
+  return db.goal.create({ data: { ...goalDto.parse(fields), userId } });
 }
 
-async function validateActionForUser(userId: string, action: AiAction) {
+async function validateActionForUser(userId: string, action: AiAction, db: Prisma.TransactionClient = prisma) {
   if (action.operation !== "CREATE") {
     if (!action.targetId) throw new AppError("A IA nao identificou o registro a alterar.", 400);
     const where = { id: action.targetId, userId };
-    const exists = action.resource === "TRANSACTION" ? await prisma.transaction.findFirst({ where })
-      : action.resource === "BILL" ? await prisma.bill.findFirst({ where })
-      : action.resource === "INVESTMENT" ? await prisma.investment.findFirst({ where })
-      : await prisma.goal.findFirst({ where });
+    const exists = action.resource === "TRANSACTION" ? await db.transaction.findFirst({ where })
+      : action.resource === "BILL" ? await db.bill.findFirst({ where })
+      : action.resource === "INVESTMENT" ? await db.investment.findFirst({ where })
+      : await db.goal.findFirst({ where });
+    if (action.resource === "TRANSACTION" && exists && "creditCardId" in exists && exists.creditCardId) throw new AppError("Compras de cartao devem ser gerenciadas na tela de cartoes.", 400);
     if (!exists) throw new AppError("A IA tentou alterar um registro invalido. Gere uma nova proposta.", 400);
   }
   if (action.resource === "TRANSACTION" && action.categoryId) {
     const currentTransaction = action.operation === "CREATE" || !action.targetId
       ? null
-      : await prisma.transaction.findFirst({ where: { id: action.targetId, userId }, select: { type: true } });
-    const category = await prisma.category.findFirst({ where: { id: action.categoryId, userId } });
+      : await db.transaction.findFirst({ where: { id: action.targetId, userId }, select: { type: true } });
+    const category = await db.category.findFirst({ where: { id: action.categoryId, userId, archived: false } });
     const transactionType = action.type ?? currentTransaction?.type;
     if (!category || (category.type && category.type !== transactionType)) throw new AppError("A IA selecionou uma categoria invalida.", 400);
   }
@@ -206,14 +213,6 @@ function withoutNulls(action: AiAction) {
 
 async function saveHistory(userId: string, kind: "ADVICE" | "COMMAND" | "REPORT", status: "ANSWERED" | "PENDING", request: string, response: string) {
   return prisma.aiHistory.create({ data: { userId, kind, status, request, response } });
-}
-
-function consumeConfirmationToken(token: string) {
-  const now = Date.now();
-  const tokenHash = crypto.createHash("sha256").update(token).digest("hex");
-  for (const [hash, expiresAt] of consumedConfirmations) if (expiresAt <= now) consumedConfirmations.delete(hash);
-  if (consumedConfirmations.has(tokenHash)) throw new AppError("Esta proposta ja foi confirmada. Gere uma nova proposta.", 409);
-  consumedConfirmations.set(tokenHash, now + 10 * 60 * 1000);
 }
 
 async function callOpenAiText(input: Array<{ role: "system" | "user"; content: string }>) {

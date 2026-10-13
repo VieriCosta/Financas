@@ -6,12 +6,12 @@ import { financeFiltersDto } from "../dtos/finance.dto.js";
 test("filtro por ano inclui todos os meses e preserva isolamento do usuario", () => {
   const where = buildTransactionWhere("user-1", { year: 2025 });
   assert.equal(where.userId, "user-1");
-  assert.deepEqual(where.AND, [{ date: { gte: new Date(2025, 0, 1), lt: new Date(2026, 0, 1) } }]);
+  assert.deepEqual(where.AND, [{ date: { gte: new Date("2025-01-01"), lt: new Date("2026-01-01") } }]);
 });
 
 test("filtro de dezembro termina em janeiro do ano seguinte", () => {
   const where = buildTransactionWhere("user-1", { month: 12, year: 2025 });
-  assert.deepEqual(where.AND, [{ date: { gte: new Date(2025, 11, 1), lt: new Date(2026, 0, 1) } }]);
+  assert.deepEqual(where.AND, [{ date: { gte: new Date("2025-12-01"), lt: new Date("2026-01-01") } }]);
 });
 
 test("sem periodo o historico nao aplica restricao de data", () => {

@@ -49,8 +49,8 @@ export async function createInstallments(userId: string, input: InstallmentInput
 }
 
 export async function listBudgets(userId: string, month: number, year: number) {
-  const start = new Date(year, month - 1, 1);
-  const end = new Date(year, month, 1);
+  const start = new Date(Date.UTC(year, month - 1, 1));
+  const end = new Date(Date.UTC(year, month, 1));
   const budgets = await prisma.budget.findMany({
     where: { userId, month, year },
     include: { category: true },
@@ -100,14 +100,14 @@ export async function ensureRecurringEntries(userId?: string) {
     let generated = 0;
 
     while (nextRunAt <= now && generated < 36) {
-      if (rule.resource === RecurringResourceType.TRANSACTION) {
+      if (current.resource === RecurringResourceType.TRANSACTION) {
         await tx.transaction.create({
           data: {
-            userId: rule.userId,
-            description: rule.title,
-            amount: rule.amount,
-            type: rule.transactionType ?? TransactionType.EXPENSE,
-            categoryId: rule.categoryId,
+            userId: current.userId,
+            description: current.title,
+            amount: current.amount,
+            type: current.transactionType ?? TransactionType.EXPENSE,
+            categoryId: current.categoryId,
             date: nextRunAt
           }
         });
@@ -130,7 +130,7 @@ export async function getFinancialProjection(userId: string) {
   await ensureRecurringEntries(userId);
   const now = new Date();
   const end = new Date(now);
-  end.setDate(end.getDate() + 30);
+  end.setUTCDate(end.getUTCDate() + 30);
   const [pastTransactions, scheduledTransactions, pendingBills, accounts, paidBills, payments, cardExpenses] = await Promise.all([
     prisma.transaction.findMany({ where: { userId, creditCardId: null, date: { lte: now } }, select: { amount: true, type: true } }),
     prisma.transaction.findMany({ where: { userId, creditCardId: null, date: { gt: now, lte: end } }, select: { amount: true, type: true } }),
@@ -159,7 +159,7 @@ export async function getFinancialProjection(userId: string) {
 export async function sendDueBillNotifications() {
   const now = new Date();
   const tomorrow = new Date(now);
-  tomorrow.setDate(tomorrow.getDate() + 1);
+  tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
   const bills = await prisma.bill.findMany({
     where: {
       status: "PENDING",
@@ -186,25 +186,29 @@ function sumTransactions(items: Array<{ amount: Prisma.Decimal; type: Transactio
   return items.reduce((total, item) => total + (item.type === TransactionType.INCOME ? Number(item.amount) : -Number(item.amount)), 0);
 }
 
-export function addFrequency(date: Date, frequency: RecurrenceFrequency, interval: number) {
+export function addFrequency(date: Date, frequency: RecurrenceFrequency, interval: number, anchorDay = date.getUTCDate()) {
   if (frequency === RecurrenceFrequency.WEEKLY) {
     const next = new Date(date);
-    next.setDate(next.getDate() + 7 * interval);
+    next.setUTCDate(next.getUTCDate() + 7 * interval);
     return next;
   }
   if (frequency === RecurrenceFrequency.YEARLY) {
-    return addMonths(date, interval * 12);
+    const next = addMonths(date, interval * 12);
+    next.setUTCDate(Math.min(anchorDay, new Date(Date.UTC(next.getUTCFullYear(), next.getUTCMonth() + 1, 0)).getUTCDate()));
+    return next;
   }
-  return addMonths(date, interval);
+  const next = addMonths(date, interval);
+  next.setUTCDate(Math.min(anchorDay, new Date(Date.UTC(next.getUTCFullYear(), next.getUTCMonth() + 1, 0)).getUTCDate()));
+  return next;
 }
 
 export function addMonths(date: Date, months: number) {
   const next = new Date(date);
-  const day = next.getDate();
-  next.setDate(1);
-  next.setMonth(next.getMonth() + months);
-  const lastDay = new Date(next.getFullYear(), next.getMonth() + 1, 0).getDate();
-  next.setDate(Math.min(day, lastDay));
+  const day = next.getUTCDate();
+  next.setUTCDate(1);
+  next.setUTCMonth(next.getUTCMonth() + months);
+  const lastDay = new Date(Date.UTC(next.getUTCFullYear(), next.getUTCMonth() + 1, 0)).getUTCDate();
+  next.setUTCDate(Math.min(day, lastDay));
   return next;
 }
 

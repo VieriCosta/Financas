@@ -26,10 +26,24 @@ function rowSchema(model: ModelName) {
     else validator = z.unknown();
     if (field.isList) validator = z.array(validator).max(100);
     if (!field.isRequired) validator = validator.nullable().optional();
-    if (field.hasDefaultValue || field.isUpdatedAt) validator = validator.optional();
+    if ((field.hasDefaultValue || field.isUpdatedAt) && field.name !== "id") validator = validator.optional();
     fields[field.name] = validator;
   }
-  return z.object(fields).strict();
+  return z.object(fields).strict().superRefine((row, context) => {
+    const problem = (path: string, message: string) => context.addIssue({ code: "custom", path: [path], message });
+    for (const key of ["amount", "limitAmount", "totalAmount", "targetAmount"]) if (key in row && (Number(row[key]) <= 0 || Math.abs(Number(row[key]) * 100 - Math.round(Number(row[key]) * 100)) > 0.0001)) problem(key, "Valor positivo com ate duas casas decimais obrigatorio.");
+    for (const key of ["currentAmount", "currentValue", "investedAmount", "contribution"]) if (key in row && Number(row[key]) < 0) problem(key, "Valor negativo nao permitido.");
+    for (const key of ["closingDay", "dueDay", "dayOfMonth", "recurrenceDay"]) if (row[key] != null && (Number(row[key]) < 1 || Number(row[key]) > 31)) problem(key, "Dia invalido.");
+    if (row.month != null && (Number(row.month) < 1 || Number(row.month) > 12)) problem("month", "Mes invalido.");
+    if (row.year != null && (Number(row.year) < 2000 || Number(row.year) > 2200)) problem("year", "Ano invalido.");
+    if (row.invoiceMonth != null && !/^\d{4}-(0[1-9]|1[0-2])$/.test(String(row.invoiceMonth))) problem("invoiceMonth", "Fatura invalida.");
+    if (model === "Transfer" && row.fromAccountId === row.toAccountId) problem("toAccountId", "Escolha contas diferentes.");
+    if (model === "Transaction" && row.creditCardId && (row.accountId || row.type !== "EXPENSE" || !row.invoiceMonth)) problem("creditCardId", "Compra de cartao invalida.");
+    if (model === "Attachment") {
+      if (!["image/jpeg", "image/png", "application/pdf"].includes(String(row.mimeType))) problem("mimeType", "Formato invalido.");
+      if (!(row.content instanceof Uint8Array) || row.content.length !== row.size || row.content.length > 2 * 1024 * 1024) problem("content", "Comprovante invalido.");
+    }
+  });
 }
 export function validateBackup(input: unknown) {
   const shape = Object.fromEntries(backupModels.map(model => [model, z.array(rowSchema(model)).max(50000)]));

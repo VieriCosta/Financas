@@ -8,15 +8,16 @@ export async function audit(userId: string, action: string, resource: string, re
 }
 
 export async function getMonthlyClosing(userId: string, month: number, year: number, persist = false) {
-  const start = new Date(year, month - 1, 1);
-  const end = new Date(year, month, 1);
-  const [transactions, budgets, previous] = await Promise.all([
+  const start = new Date(Date.UTC(year, month - 1, 1));
+  const end = new Date(Date.UTC(year, month, 1));
+  const [transactions, budgets, previous, paidBills] = await Promise.all([
     prisma.transaction.findMany({ where: { userId, date: { gte: start, lt: end } }, include: { category: true } }),
     listBudgets(userId, month, year),
-    prisma.monthlyClosing.findUnique({ where: { userId_month_year: { userId, month, year } } })
+    prisma.monthlyClosing.findUnique({ where: { userId_month_year: { userId, month, year } } }),
+    prisma.bill.aggregate({ where: { userId, status: "PAID", OR: [{ paidAt: { gte: start, lt: end } }, { paidAt: null, dueDate: { gte: start, lt: end } }] }, _sum: { amount: true } })
   ]);
   const income = sumByType(transactions, TransactionType.INCOME);
-  const expense = sumByType(transactions, TransactionType.EXPENSE);
+  const expense = sumByType(transactions, TransactionType.EXPENSE) + Number(paidBills._sum.amount ?? 0);
   const budgetTotal = budgets.reduce((sum, item) => sum + Number(item.limitAmount), 0);
   const categories = budgets.map((item) => ({ category: item.category.name, limit: Number(item.limitAmount), spent: item.spent, difference: item.remaining }));
   const snapshot = { income, expense, balance: income - expense, budgetTotal, categories };
@@ -35,10 +36,10 @@ export async function getMonthlyClosing(userId: string, month: number, year: num
 export async function getInternalAlerts(userId: string) {
   const now = new Date();
   const soon = new Date(now);
-  soon.setDate(soon.getDate() + 3);
+  soon.setUTCDate(soon.getUTCDate() + 3);
   const [bills, budgets, goals, projection] = await Promise.all([
     prisma.bill.findMany({ where: { userId, status: "PENDING", dueDate: { lte: soon } }, orderBy: { dueDate: "asc" } }),
-    listBudgets(userId, now.getMonth() + 1, now.getFullYear()),
+    listBudgets(userId, now.getUTCMonth() + 1, now.getUTCFullYear()),
     prisma.goal.findMany({ where: { userId, deadline: { lt: now } } }),
     import("./planning.service.js").then(({ getFinancialProjection }) => getFinancialProjection(userId))
   ]);
@@ -52,7 +53,7 @@ export async function getInternalAlerts(userId: string) {
 
 export async function getEmergencyReserve(userId: string) {
   const now = new Date();
-  const start = new Date(now.getFullYear(), now.getMonth() - 3, 1);
+  const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 3, 1));
   const [expenses, reserves] = await Promise.all([
     prisma.transaction.aggregate({ where: { userId, type: "EXPENSE", date: { gte: start, lte: now } }, _sum: { amount: true } }),
     prisma.investment.aggregate({ where: { userId, type: "EMERGENCY_RESERVE" }, _sum: { currentValue: true } })

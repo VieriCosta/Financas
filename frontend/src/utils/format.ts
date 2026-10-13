@@ -8,5 +8,7 @@ export function money(value: number | string) {
 }
 
 export function dateLabel(value: string) {
-  return new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "short", year: "numeric" }).format(new Date(value));
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Data invalida";
+  return new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "short", year: "numeric", timeZone: "UTC" }).format(date);
 }

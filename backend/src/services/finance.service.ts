@@ -27,12 +27,12 @@ export function buildTransactionWhere(userId: string, filters: Record<string, un
   }
 
   if (filters.month || filters.year) {
-    const year = Number(filters.year ?? new Date().getFullYear());
+    const year = Number(filters.year ?? new Date().getUTCFullYear());
     const month = filters.month ? Number(filters.month) : undefined;
     and.push({
       date: {
-        gte: new Date(year, month ? month - 1 : 0, 1),
-        lt: month ? new Date(year, month, 1) : new Date(year + 1, 0, 1)
+        gte: new Date(Date.UTC(year, month ? month - 1 : 0, 1)),
+        lt: month ? new Date(Date.UTC(year, month, 1)) : new Date(Date.UTC(year + 1, 0, 1))
       }
     });
   }
@@ -54,8 +54,8 @@ export async function getDashboard(userId: string) {
   await ensureRecurringBills(userId);
 
   const now = new Date();
-  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-  const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+  const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+  const nextMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1));
 
   const [transactions, investments, goals, bills, projection, preference] = await Promise.all([
     prisma.transaction.findMany({
@@ -87,7 +87,7 @@ export async function getDashboard(userId: string) {
   const paidBills = bills.filter((bill) => bill.status === "PAID");
   const paidBillsTotal = paidBills.reduce((sum, bill) => sum + Number(bill.amount), 0);
   const paidBillsThisMonth = paidBills
-    .filter((bill) => bill.dueDate >= monthStart && bill.dueDate < nextMonth)
+    .filter((bill) => (bill.paidAt ?? bill.dueDate) >= monthStart && (bill.paidAt ?? bill.dueDate) < nextMonth)
     .reduce((sum, bill) => sum + Number(bill.amount), 0);
 
   const investmentTotal = investments.reduce((sum, item) => sum + Number(item.currentValue), 0);
@@ -95,23 +95,23 @@ export async function getDashboard(userId: string) {
 
   const chartMonths = preference?.chartMonths ?? 6;
   const monthlySeries = Array.from({ length: chartMonths }).map((_, index) => {
-    const date = new Date(now.getFullYear(), now.getMonth() - (chartMonths - 1 - index), 1);
+    const date = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - (chartMonths - 1 - index), 1));
     const monthTransactions = transactions.filter(
-      (item) => item.date.getMonth() === date.getMonth() && item.date.getFullYear() === date.getFullYear()
+      (item) => item.date.getUTCMonth() === date.getUTCMonth() && item.date.getUTCFullYear() === date.getUTCFullYear()
     );
     const monthPaidBills = paidBills
-      .filter((bill) => bill.dueDate.getMonth() === date.getMonth() && bill.dueDate.getFullYear() === date.getFullYear())
+      .filter((bill) => (bill.paidAt ?? bill.dueDate).getUTCMonth() === date.getUTCMonth() && (bill.paidAt ?? bill.dueDate).getUTCFullYear() === date.getUTCFullYear())
       .reduce((sum, bill) => sum + Number(bill.amount), 0);
 
     return {
-      month: date.toLocaleDateString("pt-BR", { month: "short" }),
+      month: date.toLocaleDateString("pt-BR", { month: "short", timeZone: "UTC" }),
       receitas: monthTransactions.filter((item) => item.type === "INCOME").reduce((sum, item) => sum + Number(item.amount), 0),
       despesas: monthTransactions.filter((item) => item.type === "EXPENSE").reduce((sum, item) => sum + Number(item.amount), 0) + monthPaidBills
     };
   });
 
   const categorySummary = transactions
-    .filter((item) => item.type === "EXPENSE")
+    .filter((item) => item.type === "EXPENSE" && item.date >= monthStart && item.date < nextMonth)
     .reduce<Record<string, { value: number; color: string }>>((acc, item) => {
       const key = item.category?.name ?? "Sem categoria";
       acc[key] = {
@@ -121,9 +121,9 @@ export async function getDashboard(userId: string) {
       return acc;
     }, {});
 
-  if (paidBillsTotal > 0) {
+  if (paidBillsThisMonth > 0) {
     categorySummary["Agenda paga"] = {
-      value: paidBillsTotal,
+      value: paidBillsThisMonth,
       color: "#0f766e"
     };
   }
@@ -149,8 +149,8 @@ export async function getDashboard(userId: string) {
 export async function ensureRecurringBills(userId: string, referenceDate = new Date()) {
   return prisma.$transaction(async (tx) => {
   await tx.$queryRaw`SELECT id FROM "User" WHERE id = ${userId} FOR UPDATE`;
-  const monthStart = new Date(referenceDate.getFullYear(), referenceDate.getMonth(), 1);
-  const nextMonth = new Date(referenceDate.getFullYear(), referenceDate.getMonth() + 1, 1);
+  const monthStart = new Date(Date.UTC(referenceDate.getUTCFullYear(), referenceDate.getUTCMonth(), 1));
+  const nextMonth = new Date(Date.UTC(referenceDate.getUTCFullYear(), referenceDate.getUTCMonth() + 1, 1));
 
   const recurringBills = await tx.bill.findMany({
     where: { userId, isRecurring: true, recurrenceDay: { not: null } },
@@ -158,9 +158,9 @@ export async function ensureRecurringBills(userId: string, referenceDate = new D
   });
 
   for (const bill of recurringBills) {
-    const recurrenceDay = bill.recurrenceDay ?? bill.dueDate.getDate();
-    const lastDay = new Date(referenceDate.getFullYear(), referenceDate.getMonth() + 1, 0).getDate();
-    const dueDate = new Date(referenceDate.getFullYear(), referenceDate.getMonth(), Math.min(recurrenceDay, lastDay));
+    const recurrenceDay = bill.recurrenceDay ?? bill.dueDate.getUTCDate();
+    const lastDay = new Date(Date.UTC(referenceDate.getUTCFullYear(), referenceDate.getUTCMonth() + 1, 0)).getUTCDate();
+    const dueDate = new Date(Date.UTC(referenceDate.getUTCFullYear(), referenceDate.getUTCMonth(), Math.min(recurrenceDay, lastDay)));
     const exists = await tx.bill.findFirst({
       where: {
         userId,
