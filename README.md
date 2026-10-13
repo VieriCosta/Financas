@@ -46,11 +46,16 @@ npm.cmd run prisma:generate -w backend
 npm.cmd run dev -w backend
 ```
 
-6. Inicie frontend:
+6. Inicie frontend com atualizacao automatica ao editar:
 
 ```bash
-npm.cmd run start:frontend
+npm.cmd run dev:frontend
 ```
+
+Para iniciar backend e frontend juntos, use `npm.cmd run dev`.
+Para verificar o build e os testes, use `npm.cmd run check`.
+`npm.cmd run start:frontend` continua disponivel para visualizar o build de producao.
+O roteiro de evolucao esta em [MELHORIAS.md](MELHORIAS.md).
 
 URLs:
 

@@ -26,11 +26,11 @@ export function buildTransactionWhere(userId: string, filters: Record<string, un
 
   if (filters.month || filters.year) {
     const year = Number(filters.year ?? new Date().getFullYear());
-    const month = Number(filters.month ?? new Date().getMonth() + 1);
+    const month = filters.month ? Number(filters.month) : undefined;
     and.push({
       date: {
-        gte: new Date(year, month - 1, 1),
-        lt: new Date(year, month, 1)
+        gte: new Date(year, month ? month - 1 : 0, 1),
+        lt: month ? new Date(year, month, 1) : new Date(year + 1, 0, 1)
       }
     });
   }

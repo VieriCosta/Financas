@@ -72,18 +72,22 @@ export const updateGoalDto = goalDto.partial().extend({
 });
 
 export const financeFiltersDto = z.object({
-  month: z.coerce.number().min(1).max(12).optional(),
-  year: z.coerce.number().min(2000).optional(),
+  month: z.coerce.number().int().min(1).max(12).optional(),
+  year: z.coerce.number().int().min(2000).max(2200).optional(),
   categoryId: z.string().uuid().optional(),
   type: z.nativeEnum(TransactionType).optional(),
   from: z.coerce.date().optional(),
   to: z.coerce.date().optional(),
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(100).default(20),
-  search: z.string().trim().min(1).max(100).optional()
-  ,minAmount: z.coerce.number().finite().nonnegative().optional()
-  ,maxAmount: z.coerce.number().finite().nonnegative().optional()
-  ,tagId: z.string().uuid().optional()
+  search: z.string().trim().min(1).max(100).optional(),
+  minAmount: z.coerce.number().finite().nonnegative().optional(),
+  maxAmount: z.coerce.number().finite().nonnegative().optional(),
+  tagId: z.string().uuid().optional()
+}).refine((filters) => filters.minAmount == null || filters.maxAmount == null || filters.minAmount <= filters.maxAmount, {
+  path: ["maxAmount"], message: "O valor maximo deve ser maior ou igual ao minimo."
+}).refine((filters) => !filters.from || !filters.to || filters.from <= filters.to, {
+  path: ["to"], message: "A data final deve ser maior ou igual a inicial."
 });
 
 export const bulkTransactionsDto = z.object({

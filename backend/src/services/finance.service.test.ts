@@ -1,6 +1,29 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { buildTransactionWhere, toCsv } from "./finance.service.js";
+import { financeFiltersDto } from "../dtos/finance.dto.js";
+
+test("filtro por ano inclui todos os meses e preserva isolamento do usuario", () => {
+  const where = buildTransactionWhere("user-1", { year: 2025 });
+  assert.equal(where.userId, "user-1");
+  assert.deepEqual(where.AND, [{ date: { gte: new Date(2025, 0, 1), lt: new Date(2026, 0, 1) } }]);
+});
+
+test("filtro de dezembro termina em janeiro do ano seguinte", () => {
+  const where = buildTransactionWhere("user-1", { month: 12, year: 2025 });
+  assert.deepEqual(where.AND, [{ date: { gte: new Date(2025, 11, 1), lt: new Date(2026, 0, 1) } }]);
+});
+
+test("sem periodo o historico nao aplica restricao de data", () => {
+  assert.equal(buildTransactionWhere("user-1", {}).AND, undefined);
+});
+
+test("validacao rejeita periodos e faixas de valor invalidos", () => {
+  for (const filters of [{ month: 1.5 }, { year: 2025.5 }, { year: 2201 }, { minAmount: 100, maxAmount: 50 }, { from: "2026-02-01", to: "2026-01-01" }]) {
+    assert.equal(financeFiltersDto.safeParse(filters).success, false);
+  }
+  assert.equal(financeFiltersDto.safeParse({ year: 2025, minAmount: 0, maxAmount: 100 }).success, true);
+});
 
 test("buildTransactionWhere aplica filtros de usuario, mes e busca", () => {
   const where = buildTransactionWhere("user-1", {

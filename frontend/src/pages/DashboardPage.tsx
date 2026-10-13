@@ -56,7 +56,7 @@ import { dateLabel, money } from "../utils/format";
 
 type ViewKey = "overview" | "transactions" | "agenda" | "planning" | "insights" | "investments" | "goals" | "ai" | "profile";
 type Toast = { type: "success" | "error"; message: string } | null;
-type TransactionFilters = { month: string; type: string; search: string; categoryId: string; tagId: string; minAmount: string; maxAmount: string };
+type TransactionFilters = { month: string; year: string; type: string; search: string; categoryId: string; tagId: string; minAmount: string; maxAmount: string };
 type RefreshedData = {
   dashboard: DashboardData;
   transactions: PaginatedTransactions;
@@ -113,7 +113,8 @@ export function DashboardPage() {
   const [activeView, setActiveView] = useState<ViewKey>("overview");
   const [dark, setDark] = useState(() => localStorage.getItem("finance.theme") !== "light");
   const [loading, setLoading] = useState(true);
-  const [filters, setFilters] = useState({ month: String(new Date().getMonth() + 1), type: "", search: "", categoryId: "", tagId: "", minAmount: "", maxAmount: "" });
+  const [filters, setFilters] = useState({ month: String(new Date().getMonth() + 1), year: String(new Date().getFullYear()), type: "", search: "", categoryId: "", tagId: "", minAmount: "", maxAmount: "" });
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [transactionsPage, setTransactionsPage] = useState(emptyTransactions);
   const [saving, setSaving] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -138,6 +139,9 @@ export function DashboardPage() {
         api.get("/tags", { params: { _t: requestId } }),
         api.get("/dashboard-preference", { params: { _t: requestId } })
       ]);
+
+      const failedRequests = [dashboardResponse, categoriesResponse, transactionsResponse, billsResponse, goalsResponse, investmentsResponse, tagsResponse, preferenceResponse].filter((result) => result.status === "rejected");
+      setLoadError(failedRequests.length ? "Alguns dados nao puderam ser atualizados. Os valores exibidos podem estar desatualizados." : null);
 
       const nextDashboard: DashboardData = {
         ...(dashboardResponse.status === "fulfilled" ? dashboardResponse.value.data : dashboard),
@@ -177,8 +181,12 @@ export function DashboardPage() {
   }
 
   async function loadTransactions(page = transactionsPage.page) {
-    const response = await api.get("/transactions", { params: transactionParams(filters, page, Date.now()) });
-    setTransactionsPage(response.data);
+    try {
+      const response = await api.get("/transactions", { params: transactionParams(filters, page, Date.now()) });
+      setTransactionsPage(response.data);
+    } catch (error) {
+      notify("error", getApiErrorMessage(error, "Nao foi possivel carregar as movimentacoes."));
+    }
   }
 
   useEffect(() => {
@@ -205,7 +213,9 @@ export function DashboardPage() {
   const incomeCategories = useMemo(() => categories.filter((category) => category.type !== "EXPENSE"), [categories]);
 
   useEffect(() => {
-    if (!loading) loadTransactions(1);
+    if (loading) return;
+    const timeout = window.setTimeout(() => void loadTransactions(1), 300);
+    return () => window.clearTimeout(timeout);
   }, [filters]);
 
   useEffect(() => {
@@ -510,6 +520,7 @@ export function DashboardPage() {
         </header>
 
         <div className="dashboard-content mx-auto max-w-7xl px-4 py-6 sm:px-6">
+          {loadError && <div role="alert" className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-400 bg-amber-50 p-4 text-sm text-amber-900 dark:bg-amber-950 dark:text-amber-100"><span>{loadError}</span><button type="button" disabled={refreshing} onClick={() => void loadData()} className="font-semibold underline disabled:opacity-50">Tentar novamente</button></div>}
           {activeView === "overview" && <Overview dashboard={dashboard} preference={preference} onBillStatusChange={updateBillStatus} />}
           {activeView === "transactions" && (
             <TransactionsView
@@ -767,14 +778,16 @@ function TransactionsView({
         </form>
       </Panel>
 
-      <Panel title="Historico do mes">
+      <Panel title="Historico de movimentacoes">
         <div className="mb-4 flex flex-wrap gap-2">
           <label className="flex h-10 items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 text-sm shadow-sm dark:border-slate-800 dark:bg-slate-900 dark:shadow-none">
             <Search size={16} />
-            <select value={filters.month} onChange={(event) => setFilters({ ...filters, month: event.target.value })} className="bg-transparent outline-none">
-              {Array.from({ length: 12 }).map((_, index) => <option key={index + 1} value={index + 1}>{index + 1}</option>)}
+            <select aria-label="Mes do historico" value={filters.month} onChange={(event) => setFilters({ ...filters, month: event.target.value })} className="bg-transparent outline-none">
+              <option value="">Todos os meses</option>
+              {Array.from({ length: 12 }).map((_, index) => <option key={index + 1} value={index + 1}>{new Date(2026, index, 1).toLocaleDateString("pt-BR", { month: "long" })}</option>)}
             </select>
           </label>
+          <input aria-label="Ano do historico" type="number" min="2000" max="2200" placeholder="Todos os anos" value={filters.year} onChange={(event) => setFilters({ ...filters, year: event.target.value })} className="h-10 w-36 rounded-lg border border-slate-300 bg-white px-3 text-sm dark:border-slate-800 dark:bg-slate-900" />
           <Select name="filterType" value={filters.type} onChange={(value) => setFilters({ ...filters, type: value })} options={[["", "Todos"], ["INCOME", "Receitas"], ["EXPENSE", "Despesas"]]} />
           <input value={filters.search} onChange={(event) => setFilters({ ...filters, search: event.target.value })} placeholder="Buscar" className="h-10 rounded-lg border border-slate-300 bg-white px-3 text-sm shadow-sm outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 dark:border-slate-800 dark:bg-slate-900 dark:shadow-none" />
           <Select name="categoryFilter" value={filters.categoryId} onChange={(value) => setFilters({ ...filters, categoryId: value })} options={[["", "Categorias"], ...categories.map((item) => [item.id, item.name] as [string, string])]} />
@@ -2063,8 +2076,9 @@ function SubmitButton({ disabled, children }: { disabled?: boolean; children: Re
 function transactionParams(filters: TransactionFilters, page: number, requestId?: number) {
   return {
     month: filters.month || undefined,
+    year: filters.year || undefined,
     type: filters.type || undefined,
-    search: filters.search || undefined,
+    search: filters.search.trim() || undefined,
     categoryId: filters.categoryId || undefined,
     tagId: filters.tagId || undefined,
     minAmount: filters.minAmount || undefined,
