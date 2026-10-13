@@ -5,9 +5,11 @@ import { csrfProtection } from "../utils/session.js";
 import { accountDto, cardDto, paymentDto, purchaseDto, transferDto } from "../dtos/ledger.dto.js";
 import { cardInvoices, createCardPurchase, ensureAccount, listAccounts, payInvoice } from "../services/ledger.service.js";
 import { AppError } from "../utils/AppError.js";
+import { financialReport, reportDto } from "../services/report.service.js";
 
 export const ledgerRoutes = Router();
 ledgerRoutes.use(authMiddleware);
+ledgerRoutes.get("/reports", async (req, res) => res.json(await financialReport(req.userId, reportDto.parse(req.query))));
 ledgerRoutes.get("/accounts", async (req, res) => res.json(await listAccounts(req.userId)));
 ledgerRoutes.post("/accounts", csrfProtection, async (req, res) => res.status(201).json(await prisma.account.create({ data: { ...accountDto.parse(req.body), userId: req.userId } })));
 ledgerRoutes.patch("/accounts/:id", csrfProtection, async (req, res) => {
