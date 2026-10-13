@@ -131,14 +131,21 @@ export async function getFinancialProjection(userId: string) {
   const now = new Date();
   const end = new Date(now);
   end.setDate(end.getDate() + 30);
-  const [pastTransactions, scheduledTransactions, pendingBills] = await Promise.all([
-    prisma.transaction.findMany({ where: { userId, date: { lte: now } }, select: { amount: true, type: true } }),
-    prisma.transaction.findMany({ where: { userId, date: { gt: now, lte: end } }, select: { amount: true, type: true } }),
-    prisma.bill.findMany({ where: { userId, status: "PENDING", dueDate: { lte: end } }, select: { amount: true } })
+  const [pastTransactions, scheduledTransactions, pendingBills, accounts, paidBills, payments, cardExpenses] = await Promise.all([
+    prisma.transaction.findMany({ where: { userId, creditCardId: null, date: { lte: now } }, select: { amount: true, type: true } }),
+    prisma.transaction.findMany({ where: { userId, creditCardId: null, date: { gt: now, lte: end } }, select: { amount: true, type: true } }),
+    prisma.bill.findMany({ where: { userId, status: "PENDING", dueDate: { lte: end } }, select: { amount: true } }),
+    prisma.account.findMany({ where: { userId }, select: { openingBalance: true } }),
+    prisma.bill.aggregate({ where: { userId, status: "PAID" }, _sum: { amount: true } }),
+    prisma.cardPayment.findMany({ where: { userId }, include: { creditCard: true } }),
+    prisma.transaction.findMany({ where: { userId, creditCardId: { not: null } }, include: { creditCard: true } })
   ]);
-  const currentBalance = sumTransactions(pastTransactions);
+  const currentBalance = sumTransactions(pastTransactions) + accounts.reduce((sum, account) => sum + Number(account.openingBalance), 0) - Number(paidBills._sum.amount ?? 0) - payments.filter(item => item.date <= now).reduce((sum, item) => sum + Number(item.amount), 0);
   const scheduledBalance = sumTransactions(scheduledTransactions);
-  const pendingBillTotal = pendingBills.reduce((total, bill) => total + Number(bill.amount), 0);
+  const { invoiceDueDate } = await import("./ledger.service.js");
+  const cardDue = cardExpenses.filter(item => item.creditCard && item.invoiceMonth && invoiceDueDate(item.invoiceMonth, item.creditCard.closingDay, item.creditCard.dueDay) <= end).reduce((sum, item) => sum + Number(item.amount), 0);
+  const cardPaid = payments.filter(item => invoiceDueDate(item.invoiceMonth, item.creditCard.closingDay, item.creditCard.dueDay) <= end).reduce((sum, item) => sum + Number(item.amount), 0);
+  const pendingBillTotal = pendingBills.reduce((total, bill) => total + Number(bill.amount), 0) + Math.max(0, cardDue - cardPaid);
 
   return {
     currentBalance,

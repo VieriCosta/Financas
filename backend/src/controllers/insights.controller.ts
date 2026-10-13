@@ -3,14 +3,17 @@ import { prisma } from "../config/prisma.js";
 import { bulkTransactionsDto, dashboardPreferenceDto, tagDto } from "../dtos/finance.dto.js";
 import { AppError } from "../utils/AppError.js";
 import { audit, getDashboardPreference, getEmergencyReserve, getInternalAlerts, getMonthlyClosing, saveAttachment } from "../services/insights.service.js";
+import { periodDto } from "../dtos/ledger.dto.js";
 
 export async function monthlyClosing(req: Request, res: Response) {
   const now = new Date();
-  return res.json(await getMonthlyClosing(req.userId, Number(req.query.month ?? now.getMonth() + 1), Number(req.query.year ?? now.getFullYear())));
+  const period = periodDto.parse({ month: req.query.month ?? now.getMonth() + 1, year: req.query.year ?? now.getFullYear() });
+  return res.json(await getMonthlyClosing(req.userId, period.month, period.year));
 }
 export async function closeMonth(req: Request, res: Response) {
   const now = new Date();
-  return res.json(await getMonthlyClosing(req.userId, Number(req.body.month ?? now.getMonth() + 1), Number(req.body.year ?? now.getFullYear()), true));
+  const period = periodDto.parse({ month: req.body.month ?? now.getMonth() + 1, year: req.body.year ?? now.getFullYear() });
+  return res.json(await getMonthlyClosing(req.userId, period.month, period.year, true));
 }
 export async function alerts(req: Request, res: Response) {
   return res.json(await getInternalAlerts(req.userId));
@@ -30,7 +33,10 @@ export async function bulkTransactions(req: Request, res: Response) {
   const data = bulkTransactionsDto.parse(req.body);
   const count = await prisma.transaction.count({ where: { userId: req.userId, id: { in: data.ids } } });
   if (count !== data.ids.length) throw new AppError("Uma ou mais movimentacoes sao invalidas.", 400);
-  if (data.action === "DELETE") await prisma.transaction.deleteMany({ where: { userId: req.userId, id: { in: data.ids } } });
+  if (data.action === "DELETE") {
+    if (await prisma.transaction.count({ where: { userId: req.userId, id: { in: data.ids }, creditCardId: { not: null } } })) throw new AppError("Compras de cartao nao podem ser excluidas em lote.", 400);
+    await prisma.transaction.deleteMany({ where: { userId: req.userId, id: { in: data.ids } } });
+  }
   if (data.action === "SET_CATEGORY") {
     if (!data.categoryId) throw new AppError("Informe uma categoria.", 400);
     const category = await prisma.category.findFirst({ where: { id: data.categoryId, userId: req.userId } });

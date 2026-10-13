@@ -55,6 +55,7 @@ import { Bill, Budget, Category, DashboardData, DashboardPreference, EmergencyRe
 import { dateLabel, money } from "../utils/format";
 
 import { Toast, TransactionFilters, RefreshedData } from "../types/dashboard";
+import { Account } from "../pages/AccountsPage";
 
 export function Overview({ dashboard, preference, onBillStatusChange }: { dashboard: DashboardData; preference: DashboardPreference; onBillStatusChange: (bill: Bill) => Promise<void> }) {
   const hidden = new Set(preference.hiddenWidgets);
@@ -222,6 +223,8 @@ export function TransactionsView({
   onRefresh: () => Promise<RefreshedData | null>;
   notify: (type: "success" | "error", message: string) => void;
 }) {
+  const [accounts, setAccounts] = useState<Account[]>([]);
+  useEffect(() => { void api.get<Account[]>("/accounts").then(response => setAccounts(response.data.filter(item => !item.archived))).catch(() => notify("error", "Nao foi possivel carregar as contas.")); }, []);
   const [newTransactionType, setNewTransactionType] = useState<Transaction["type"]>("EXPENSE");
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const newTransactionCategories = categories.filter((category) => categoryMatchesTransactionType(category, newTransactionType));
@@ -276,6 +279,7 @@ export function TransactionsView({
           <Input name="amount" placeholder="Valor" type="number" step="0.01" />
           <Select name="type" value={newTransactionType} onChange={(value) => setNewTransactionType(value as Transaction["type"])} options={[["INCOME", "Receita"], ["EXPENSE", "Despesa"]]} />
           <Select name="categoryId" options={[["", newTransactionType === "INCOME" ? "Categoria de receita" : "Categoria de despesa"], ...newTransactionCategories.map((item) => [item.id, item.name] as [string, string])]} />
+          <Select name="accountId" options={[["", "Sem conta vinculada"], ...accounts.map(item => [item.id, item.name] as [string, string])]} />
           <Input name="date" type="date" />
           <SubmitButton disabled={saving}><Plus size={18} /> Adicionar</SubmitButton>
         </form>

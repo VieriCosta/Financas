@@ -8,6 +8,8 @@ export function buildTransactionWhere(userId: string, filters: Record<string, un
 
   if (filters.type) where.type = filters.type as TransactionType;
   if (filters.categoryId) where.categoryId = String(filters.categoryId);
+  if (filters.accountId) where.accountId = String(filters.accountId);
+  if (typeof filters.reconciled === "boolean") where.reconciled = filters.reconciled;
   if (filters.tagId) where.tags = { some: { tagId: String(filters.tagId) } };
   if (filters.minAmount != null || filters.maxAmount != null) {
     where.amount = {
@@ -89,7 +91,7 @@ export async function getDashboard(userId: string) {
     .reduce((sum, bill) => sum + Number(bill.amount), 0);
 
   const investmentTotal = investments.reduce((sum, item) => sum + Number(item.currentValue), 0);
-  const balance = totals.income - totals.expense - paidBillsTotal + investmentTotal;
+  const balance = projection.currentBalance;
 
   const chartMonths = preference?.chartMonths ?? 6;
   const monthlySeries = Array.from({ length: chartMonths }).map((_, index) => {

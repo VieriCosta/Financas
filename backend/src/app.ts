@@ -11,6 +11,7 @@ import { authRoutes } from "./routes/auth.routes.js";
 import { aiRoutes } from "./routes/ai.routes.js";
 import { financeRoutes } from "./routes/finance.routes.js";
 import { profileRoutes } from "./routes/profile.routes.js";
+import { ledgerRoutes } from "./routes/ledger.routes.js";
 
 export const app = express();
 
@@ -94,5 +95,6 @@ app.use("/api/auth", authRoutes);
 app.use("/api/ai", aiRoutes);
 app.use("/api/profile", profileRoutes);
 app.use("/api", financeRoutes);
+app.use("/api", ledgerRoutes);
 
 app.use(errorHandler);

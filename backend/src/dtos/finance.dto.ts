@@ -15,6 +15,8 @@ export const transactionDto = z.object({
   date: z.coerce.date(),
   categoryId: z.string().uuid().optional(),
   notes: z.string().trim().max(1000).optional()
+  ,accountId: z.string().uuid().nullable().optional()
+  ,reconciled: z.boolean().optional()
 });
 
 export const updateTransactionDto = transactionDto.partial();
@@ -27,6 +29,7 @@ export const billDto = z.object({
   isRecurring: z.coerce.boolean().default(false),
   recurrenceDay: z.coerce.number().min(1).max(31).optional(),
   reminderAt: z.coerce.date().optional()
+  ,accountId: z.string().uuid().nullable().optional()
 });
 
 export const updateBillDto = billDto.partial();
@@ -84,6 +87,8 @@ export const financeFiltersDto = z.object({
   minAmount: z.coerce.number().finite().nonnegative().optional(),
   maxAmount: z.coerce.number().finite().nonnegative().optional(),
   tagId: z.string().uuid().optional()
+  ,accountId: z.string().uuid().optional()
+  ,reconciled: z.enum(["true", "false"]).transform(value => value === "true").optional()
 }).refine((filters) => filters.minAmount == null || filters.maxAmount == null || filters.minAmount <= filters.maxAmount, {
   path: ["maxAmount"], message: "O valor maximo deve ser maior ou igual ao minimo."
 }).refine((filters) => !filters.from || !filters.to || filters.from <= filters.to, {

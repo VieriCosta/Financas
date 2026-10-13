@@ -17,6 +17,7 @@ export type Category = {
   color: string;
   icon: string;
   type?: TransactionType;
+  archived?: boolean;
 };
 
 export type Transaction = {
@@ -26,6 +27,9 @@ export type Transaction = {
   type: TransactionType;
   date: string;
   notes?: string;
+  accountId?: string;
+  creditCardId?: string;
+  reconciled?: boolean;
   categoryId?: string;
   category?: Category;
   installmentGroupId?: string;
@@ -35,7 +39,7 @@ export type Transaction = {
   attachments?: Attachment[];
 };
 
-export type Tag = { id: string; name: string; color: string };
+export type Tag = { id: string; name: string; color: string; archived?: boolean };
 export type Attachment = { id: string; filename: string; mimeType: string; size: number };
 export type InternalAlert = { type: string; tone: "danger" | "warning"; title: string; message: string };
 export type EmergencyReserve = { reserve: number; averageExpense: number; coveredMonths: number; recommendedReserve: number };

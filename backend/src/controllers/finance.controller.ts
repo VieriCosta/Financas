@@ -5,6 +5,8 @@ import { buildTransactionWhere, ensureRecurringBills, getDashboard, toCsv } from
 import { createInstallments, listBudgets, listRecurringRules, upsertBudget } from "../services/planning.service.js";
 import { AppError } from "../utils/AppError.js";
 import { audit } from "../services/insights.service.js";
+import { ensureAccount } from "../services/ledger.service.js";
+import { periodDto } from "../dtos/ledger.dto.js";
 
 export async function dashboard(req: Request, res: Response) {
   return res.json(await getDashboard(req.userId));
@@ -68,6 +70,7 @@ export async function exportTransactionsCsv(req: Request, res: Response) {
 
 export async function createTransaction(req: Request, res: Response) {
   const data = transactionDto.parse(req.body);
+  await ensureAccount(req.userId, data.accountId);
   await ensureCategoryOwnership(req.userId, data.categoryId, data.type);
   const transaction = await prisma.transaction.create({ data: { ...data, userId: req.userId } });
   await audit(req.userId, "CREATE", "TRANSACTION", transaction.id);
@@ -81,8 +84,7 @@ export async function createInstallmentPurchase(req: Request, res: Response) {
 
 export async function getBudgets(req: Request, res: Response) {
   const now = new Date();
-  const month = Number(req.query.month ?? now.getMonth() + 1);
-  const year = Number(req.query.year ?? now.getFullYear());
+  const { month, year } = periodDto.parse({ month: req.query.month ?? now.getMonth() + 1, year: req.query.year ?? now.getFullYear() });
   return res.json(await listBudgets(req.userId, month, year));
 }
 
@@ -116,6 +118,8 @@ export async function updateTransaction(req: Request, res: Response) {
   const currentTransaction = await prisma.transaction.findFirstOrThrow({
     where: { id: transactionId, userId: req.userId }
   });
+  if (currentTransaction.creditCardId && Object.keys(data).some(key => !["notes", "reconciled", "categoryId"].includes(key))) throw new AppError("Compras de cartao permitem editar apenas categoria, observacoes e conciliacao.", 400);
+  if (data.accountId) await ensureAccount(req.userId, data.accountId);
 
   await ensureCategoryOwnership(
     req.userId,
@@ -139,6 +143,8 @@ export async function updateTransaction(req: Request, res: Response) {
 
 export async function deleteTransaction(req: Request, res: Response) {
   const transactionId = String(req.params.id);
+  const current = await prisma.transaction.findFirst({ where: { id: transactionId, userId: req.userId } });
+  if (current?.creditCardId) throw new AppError("Compras de cartao nao podem ser excluidas pelo historico comum.", 400);
   await prisma.transaction.deleteMany({ where: { id: transactionId, userId: req.userId } });
   await audit(req.userId, "DELETE", "TRANSACTION", transactionId);
   return res.status(204).send();
@@ -151,16 +157,18 @@ export async function listBills(req: Request, res: Response) {
 
 export async function createBill(req: Request, res: Response) {
   const data = billDto.parse(req.body);
-  return res.status(201).json(await prisma.bill.create({ data: { ...data, userId: req.userId } }));
+  await ensureAccount(req.userId, data.accountId);
+  return res.status(201).json(await prisma.bill.create({ data: { ...data, paidAt: data.status === "PAID" ? new Date() : null, userId: req.userId } }));
 }
 
 export async function updateBill(req: Request, res: Response) {
   const data = updateBillDto.parse(req.body);
   const billId = String(req.params.id);
+  await ensureAccount(req.userId, data.accountId);
 
   await prisma.bill.updateMany({
     where: { id: billId, userId: req.userId },
-    data
+    data: { ...data, ...(data.status ? { paidAt: data.status === "PAID" ? new Date() : null } : {}) }
   });
 
   const bill = await prisma.bill.findFirstOrThrow({
@@ -263,7 +271,7 @@ async function ensureCategoryOwnership(userId: string, categoryId: string | unde
   if (!categoryId) return;
 
   const category = await prisma.category.findFirst({
-    where: { id: categoryId, userId }
+    where: { id: categoryId, userId, archived: false }
   });
 
   if (!category || (category.type && category.type !== transactionType)) {

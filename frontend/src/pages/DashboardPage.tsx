@@ -1,4 +1,4 @@
-import { FormEvent, InputHTMLAttributes, ReactNode, SelectHTMLAttributes, useEffect, useMemo, useRef, useState } from "react";
+import { FormEvent, ReactNode, Suspense, lazy, useEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
 import {
   Area,
@@ -57,7 +57,9 @@ import { dateLabel, money } from "../utils/format";
 import { Toast, TransactionFilters, RefreshedData } from "../types/dashboard";
 import { Overview, MiniStat, TransactionsView, AgendaView, PlanningView, InsightsView, InvestmentsView, InvestmentCard, InvestmentFields, InvestmentDetails, readInvestmentPayload, investmentNamePlaceholder, numberFromForm, optionalNumberFromForm, textFromForm, numberDefault, GoalsView, AiAdviceView, AiMessageForm, AiAnswer, aiResourceLabel, ProfileView, Metric, Panel, TransactionList, BillRow, GoalList, ToastMessage, IconButton, EmptyState, Pagination, ActionButton, SubmitButton, transactionParams, categoryMatchesTransactionType, getApiErrorMessage, getEffectiveMonthlyRate, estimateMonthlyReturn, investmentTypeLabel, buildFinancialAdvice, Input, Select } from "../components/DashboardViews";
 
-type ViewKey = "overview" | "transactions" | "agenda" | "planning" | "insights" | "investments" | "goals" | "ai" | "profile";
+const AccountsPage = lazy(() => import("./AccountsPage"));
+const CardsPage = lazy(() => import("./CardsPage"));
+type ViewKey = "overview" | "transactions" | "agenda" | "planning" | "insights" | "investments" | "goals" | "ai" | "profile" | "accounts" | "cards";
 const emptyDashboard: DashboardData = {
   cards: { balance: 0, monthIncome: 0, monthExpense: 0, investments: 0, projectedBalance: 0 },
   projection: { currentBalance: 0, projectedBalance: 0, scheduledBalance: 0, pendingBillTotal: 0, periodDays: 30 },
@@ -80,6 +82,8 @@ const emptyTransactions: PaginatedTransactions = {
 const menuItems: Array<{ key: ViewKey; label: string; icon: ReactNode }> = [
   { key: "overview", label: "Dashboard", icon: <LayoutDashboard size={21} /> },
   { key: "transactions", label: "Movimentacoes", icon: <ReceiptText size={21} /> },
+  { key: "accounts", label: "Contas e carteiras", icon: <WalletCards size={21} /> },
+  { key: "cards", label: "Cartoes e faturas", icon: <ReceiptText size={21} /> },
   { key: "agenda", label: "Agenda", icon: <CalendarClock size={21} /> },
   { key: "planning", label: "Planejamento", icon: <PiggyBank size={21} /> },
   { key: "insights", label: "Insights", icon: <SlidersHorizontal size={21} /> },
@@ -89,6 +93,8 @@ const menuItems: Array<{ key: ViewKey; label: string; icon: ReactNode }> = [
 ];
 
 const viewTitles: Record<ViewKey, { title: string; subtitle: string }> = {
+  accounts: { title: "Contas e carteiras", subtitle: "Saldos iniciais, movimentacoes e transferencias." },
+  cards: { title: "Cartoes e faturas", subtitle: "Compras, parcelas, limite e pagamento de faturas." },
   overview: { title: "Dashboard financeiro", subtitle: "Visao geral do seu mes e patrimonio." },
   transactions: { title: "Movimentacoes", subtitle: "Receitas, despesas, categorias e historico recente." },
   agenda: { title: "Agenda financeira", subtitle: "Contas a pagar, contas pagas e compromissos recorrentes." },
@@ -213,8 +219,8 @@ export function DashboardPage() {
     };
   }, [filters, transactionsPage.page]);
 
-  const expenseCategories = useMemo(() => categories.filter((category) => category.type !== "INCOME"), [categories]);
-  const incomeCategories = useMemo(() => categories.filter((category) => category.type !== "EXPENSE"), [categories]);
+  const expenseCategories = useMemo(() => categories.filter((category) => category.type !== "INCOME" && !category.archived), [categories]);
+  const incomeCategories = useMemo(() => categories.filter((category) => category.type !== "EXPENSE" && !category.archived), [categories]);
 
   useEffect(() => {
     transactionRequest.current += 1;
@@ -245,6 +251,7 @@ export function DashboardPage() {
     try {
       setSaving(true);
       await api.post("/transactions", {
+        accountId: form.get("accountId") || undefined,
         description: form.get("description"),
         amount: Number(form.get("amount")),
         type: form.get("type"),
@@ -525,6 +532,10 @@ export function DashboardPage() {
         </header>
 
         <div className="dashboard-content mx-auto max-w-7xl px-4 py-6 sm:px-6">
+          <Suspense fallback={<p role="status">Carregando...</p>}>
+            {activeView === "accounts" && <AccountsPage notify={notify} onRefresh={refreshAfterMutation} />}
+            {activeView === "cards" && <CardsPage notify={notify} categories={categories} onRefresh={refreshAfterMutation} />}
+          </Suspense>
           {loadError && <div role="alert" className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-400 bg-amber-50 p-4 text-sm text-amber-900 dark:bg-amber-950 dark:text-amber-100"><span>{loadError}</span><button type="button" disabled={refreshing} onClick={() => void loadData()} className="font-semibold underline disabled:opacity-50">Tentar novamente</button></div>}
           {activeView === "overview" && <Overview dashboard={dashboard} preference={preference} onBillStatusChange={updateBillStatus} />}
           {activeView === "transactions" && (
