@@ -145,18 +145,21 @@ export async function getDashboard(userId: string) {
 }
 
 export async function ensureRecurringBills(userId: string, referenceDate = new Date()) {
+  return prisma.$transaction(async (tx) => {
+  await tx.$queryRaw`SELECT id FROM "User" WHERE id = ${userId} FOR UPDATE`;
   const monthStart = new Date(referenceDate.getFullYear(), referenceDate.getMonth(), 1);
   const nextMonth = new Date(referenceDate.getFullYear(), referenceDate.getMonth() + 1, 1);
 
-  const recurringBills = await prisma.bill.findMany({
+  const recurringBills = await tx.bill.findMany({
     where: { userId, isRecurring: true, recurrenceDay: { not: null } },
     orderBy: { createdAt: "asc" }
   });
 
   for (const bill of recurringBills) {
     const recurrenceDay = bill.recurrenceDay ?? bill.dueDate.getDate();
-    const dueDate = new Date(referenceDate.getFullYear(), referenceDate.getMonth(), Math.min(recurrenceDay, 28));
-    const exists = await prisma.bill.findFirst({
+    const lastDay = new Date(referenceDate.getFullYear(), referenceDate.getMonth() + 1, 0).getDate();
+    const dueDate = new Date(referenceDate.getFullYear(), referenceDate.getMonth(), Math.min(recurrenceDay, lastDay));
+    const exists = await tx.bill.findFirst({
       where: {
         userId,
         title: bill.title,
@@ -166,7 +169,7 @@ export async function ensureRecurringBills(userId: string, referenceDate = new D
     });
 
     if (!exists) {
-      await prisma.bill.create({
+      await tx.bill.create({
         data: {
           title: bill.title,
           amount: bill.amount,
@@ -180,6 +183,7 @@ export async function ensureRecurringBills(userId: string, referenceDate = new D
       });
     }
   }
+  });
 }
 
 export function toCsv(rows: Array<Record<string, string | number | null | undefined>>) {

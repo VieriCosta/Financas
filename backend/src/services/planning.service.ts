@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { Prisma, RecurrenceFrequency, RecurringResourceType, TransactionType } from "@prisma/client";
+import { Prisma, RecurrenceFrequency, RecurringResourceType, TransactionType, Transaction } from "@prisma/client";
 import { prisma } from "../config/prisma.js";
 import { AppError } from "../utils/AppError.js";
 import { sendBillReminderEmail } from "./mail.service.js";
@@ -15,7 +15,8 @@ type InstallmentInput = {
   notes?: string;
 };
 
-export async function createInstallments(userId: string, input: InstallmentInput, db: DatabaseClient = prisma) {
+export async function createInstallments(userId: string, input: InstallmentInput, db: DatabaseClient = prisma): Promise<Transaction[]> {
+  if (db === prisma) return prisma.$transaction((tx) => createInstallments(userId, input, tx));
   await ensureCategory(userId, input.categoryId, TransactionType.EXPENSE, db);
   const installmentGroupId = randomUUID();
   const totalInCents = Math.round(input.totalAmount * 100);
@@ -90,12 +91,17 @@ export async function ensureRecurringEntries(userId?: string) {
   });
 
   for (const rule of rules) {
-    let nextRunAt = rule.nextRunAt;
+    await prisma.$transaction(async (tx) => {
+    // A row lock serializes generation across HTTP requests and scheduler runs.
+    await tx.$queryRaw`SELECT id FROM "RecurringRule" WHERE id = ${rule.id} FOR UPDATE`;
+    const current = await tx.recurringRule.findUnique({ where: { id: rule.id } });
+    if (!current?.active || current.nextRunAt > now) return;
+    let nextRunAt = current.nextRunAt;
     let generated = 0;
 
     while (nextRunAt <= now && generated < 36) {
       if (rule.resource === RecurringResourceType.TRANSACTION) {
-        await prisma.transaction.create({
+        await tx.transaction.create({
           data: {
             userId: rule.userId,
             description: rule.title,
@@ -106,7 +112,7 @@ export async function ensureRecurringEntries(userId?: string) {
           }
         });
       } else {
-        await prisma.bill.create({
+        await tx.bill.create({
           data: { userId: rule.userId, title: rule.title, amount: rule.amount, dueDate: nextRunAt }
         });
       }
@@ -115,7 +121,8 @@ export async function ensureRecurringEntries(userId?: string) {
       generated += 1;
     }
 
-    await prisma.recurringRule.update({ where: { id: rule.id }, data: { nextRunAt } });
+    await tx.recurringRule.update({ where: { id: rule.id }, data: { nextRunAt } });
+    });
   }
 }
 
@@ -172,21 +179,19 @@ function sumTransactions(items: Array<{ amount: Prisma.Decimal; type: Transactio
   return items.reduce((total, item) => total + (item.type === TransactionType.INCOME ? Number(item.amount) : -Number(item.amount)), 0);
 }
 
-function addFrequency(date: Date, frequency: RecurrenceFrequency, interval: number) {
+export function addFrequency(date: Date, frequency: RecurrenceFrequency, interval: number) {
   if (frequency === RecurrenceFrequency.WEEKLY) {
     const next = new Date(date);
     next.setDate(next.getDate() + 7 * interval);
     return next;
   }
   if (frequency === RecurrenceFrequency.YEARLY) {
-    const next = new Date(date);
-    next.setFullYear(next.getFullYear() + interval);
-    return next;
+    return addMonths(date, interval * 12);
   }
   return addMonths(date, interval);
 }
 
-function addMonths(date: Date, months: number) {
+export function addMonths(date: Date, months: number) {
   const next = new Date(date);
   const day = next.getDate();
   next.setDate(1);

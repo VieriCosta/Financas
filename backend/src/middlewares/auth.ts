@@ -41,6 +41,6 @@ export async function authMiddleware(req: Request, _res: Response, next: NextFun
   req.userId = payload.sub;
   req.authToken = token;
   req.sessionId = session.id;
-  void prisma.authSession.update({ where: { id: session.id }, data: { lastSeenAt: new Date() } });
+  void prisma.authSession.update({ where: { id: session.id }, data: { lastSeenAt: new Date() } }).catch(() => undefined);
   next();
 }

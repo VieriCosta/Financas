@@ -37,7 +37,8 @@ const corsOptions: cors.CorsOptions = {
     "X-CSRF-Token",
     "Cache-Control",
     "Pragma",
-    "Expires"
+    "Expires",
+    "X-Filename"
   ],
   optionsSuccessStatus: 204,
   maxAge: 86400

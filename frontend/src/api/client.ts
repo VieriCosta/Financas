@@ -13,6 +13,7 @@ function resolveApiUrl() {
 export const api = axios.create({
   baseURL: resolveApiUrl(),
   withCredentials: true,
+  timeout: 30000,
   headers: {
     "Cache-Control": "no-cache"
   }
