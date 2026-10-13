@@ -61,7 +61,8 @@ const AccountsPage = lazy(() => import("./AccountsPage"));
 const CardsPage = lazy(() => import("./CardsPage"));
 const ImportPage = lazy(() => import("./ImportPage"));
 const ReportsPage = lazy(() => import("./ReportsPage"));
-type ViewKey = "overview" | "transactions" | "agenda" | "planning" | "insights" | "investments" | "goals" | "ai" | "profile" | "accounts" | "cards" | "import" | "reports";
+const BackupPage = lazy(() => import("./BackupPage"));
+type ViewKey = "overview" | "transactions" | "agenda" | "planning" | "insights" | "investments" | "goals" | "ai" | "profile" | "accounts" | "cards" | "import" | "reports" | "backup";
 const emptyDashboard: DashboardData = {
   cards: { balance: 0, monthIncome: 0, monthExpense: 0, investments: 0, projectedBalance: 0 },
   projection: { currentBalance: 0, projectedBalance: 0, scheduledBalance: 0, pendingBillTotal: 0, periodDays: 30 },
@@ -88,6 +89,7 @@ const menuItems: Array<{ key: ViewKey; label: string; icon: ReactNode }> = [
   { key: "cards", label: "Cartoes e faturas", icon: <ReceiptText size={21} /> },
   { key: "import", label: "Importar extrato", icon: <Download size={21} /> },
   { key: "reports", label: "Relatorios", icon: <TrendingUp size={21} /> },
+  { key: "backup", label: "Backup dos dados", icon: <ShieldCheck size={21} /> },
   { key: "agenda", label: "Agenda", icon: <CalendarClock size={21} /> },
   { key: "planning", label: "Planejamento", icon: <PiggyBank size={21} /> },
   { key: "insights", label: "Insights", icon: <SlidersHorizontal size={21} /> },
@@ -101,6 +103,7 @@ const viewTitles: Record<ViewKey, { title: string; subtitle: string }> = {
   cards: { title: "Cartoes e faturas", subtitle: "Compras, parcelas, limite e pagamento de faturas." },
   import: { title: "Importacao e conciliacao", subtitle: "Revise seu extrato e evite registros duplicados." },
   reports: { title: "Relatorios financeiros", subtitle: "Compare periodos e acompanhe resultados por categoria." },
+  backup: { title: "Backup dos dados", subtitle: "Exporte e restaure seus registros financeiros." },
   overview: { title: "Dashboard financeiro", subtitle: "Visao geral do seu mes e patrimonio." },
   transactions: { title: "Movimentacoes", subtitle: "Receitas, despesas, categorias e historico recente." },
   agenda: { title: "Agenda financeira", subtitle: "Contas a pagar, contas pagas e compromissos recorrentes." },
@@ -543,6 +546,7 @@ export function DashboardPage() {
             {activeView === "cards" && <CardsPage notify={notify} categories={categories} onRefresh={refreshAfterMutation} />}
             {activeView === "import" && <ImportPage notify={notify} categories={categories} onRefresh={refreshAfterMutation} />}
             {activeView === "reports" && <ReportsPage notify={notify} categories={categories} />}
+            {activeView === "backup" && <BackupPage notify={notify} onRefresh={refreshAfterMutation} />}
           </Suspense>
           {loadError && <div role="alert" className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-400 bg-amber-50 p-4 text-sm text-amber-900 dark:bg-amber-950 dark:text-amber-100"><span>{loadError}</span><button type="button" disabled={refreshing} onClick={() => void loadData()} className="font-semibold underline disabled:opacity-50">Tentar novamente</button></div>}
           {activeView === "overview" && <Overview dashboard={dashboard} preference={preference} onBillStatusChange={updateBillStatus} />}

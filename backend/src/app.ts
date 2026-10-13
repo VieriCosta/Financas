@@ -13,6 +13,7 @@ import { financeRoutes } from "./routes/finance.routes.js";
 import { profileRoutes } from "./routes/profile.routes.js";
 import { ledgerRoutes } from "./routes/ledger.routes.js";
 import { importRoutes } from "./routes/import.routes.js";
+import { dataRoutes } from "./routes/data.routes.js";
 
 export const app = express();
 
@@ -80,6 +81,7 @@ app.use(helmet());
 app.use(cors(corsOptions));
 app.options("*", cors(corsOptions));
 app.use("/api/imports", importRoutes);
+app.use("/api/data", dataRoutes);
 app.use(express.json({ limit: "100kb" }));
 app.use(morgan(env.IS_PRODUCTION ? "combined" : "dev"));
 
