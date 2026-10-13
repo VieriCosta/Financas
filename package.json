@@ -9,7 +9,9 @@
   ],
   "scripts": {
     "dev": "concurrently \"npm run dev -w backend\" \"npm run dev:frontend\"",
-    "dev:frontend": "npm run start:frontend",
+    "dev:frontend": "npm run dev -w frontend",
+    "test": "npm run test -w backend",
+    "check": "npm run build && npm run test",
     "start:frontend": "npm run build -w frontend && npm run preview -w frontend",
     "build": "npm run build -w backend && npm run build -w frontend",
     "check:secrets": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/check-staged-secrets.ps1",
