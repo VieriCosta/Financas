@@ -64,6 +64,7 @@ export type RecurringRule = {
   title: string;
   amount: string | number;
   transactionType?: TransactionType;
+  categoryId?: string;
   frequency: RecurrenceFrequency;
   interval: number;
   nextRunAt: string;
@@ -138,6 +139,7 @@ export type DashboardData = {
 };
 
 export type PaginatedTransactions = {
+  summary?: { income: number; expense: number };
   items: Transaction[];
   total: number;
   page: number;

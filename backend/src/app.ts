@@ -14,6 +14,7 @@ import { profileRoutes } from "./routes/profile.routes.js";
 import { ledgerRoutes } from "./routes/ledger.routes.js";
 import { importRoutes } from "./routes/import.routes.js";
 import { dataRoutes } from "./routes/data.routes.js";
+import { settingsRoutes } from "./routes/settings.routes.js";
 
 export const app = express();
 
@@ -100,5 +101,6 @@ app.use("/api/ai", aiRoutes);
 app.use("/api/profile", profileRoutes);
 app.use("/api", financeRoutes);
 app.use("/api", ledgerRoutes);
+app.use("/api", settingsRoutes);
 
 app.use(errorHandler);

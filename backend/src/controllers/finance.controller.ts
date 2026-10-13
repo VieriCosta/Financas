@@ -24,7 +24,7 @@ export async function createCategory(req: Request, res: Response) {
 export async function listTransactions(req: Request, res: Response) {
   const filters = financeFiltersDto.parse(req.query);
   const where = buildTransactionWhere(req.userId, filters);
-  const [items, total] = await Promise.all([
+  const [items, total, totals] = await Promise.all([
     prisma.transaction.findMany({
       where,
       include: { category: true, tags: { include: { tag: true } }, attachments: { select: { id: true, filename: true, mimeType: true, size: true } } },
@@ -32,7 +32,8 @@ export async function listTransactions(req: Request, res: Response) {
       skip: (filters.page - 1) * filters.pageSize,
       take: filters.pageSize
     }),
-    prisma.transaction.count({ where })
+    prisma.transaction.count({ where }),
+    prisma.transaction.groupBy({ by: ["type"], where, _sum: { amount: true } })
   ]);
 
   return res.json({
@@ -40,7 +41,8 @@ export async function listTransactions(req: Request, res: Response) {
     total,
     page: filters.page,
     pageSize: filters.pageSize,
-    totalPages: Math.ceil(total / filters.pageSize)
+    totalPages: Math.max(1, Math.ceil(total / filters.pageSize)),
+    summary: { income: Number(totals.find(item => item.type === "INCOME")?._sum.amount ?? 0), expense: Number(totals.find(item => item.type === "EXPENSE")?._sum.amount ?? 0) }
   });
 }
 

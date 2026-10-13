@@ -56,6 +56,8 @@ import { dateLabel, money } from "../utils/format";
 
 import { Toast, TransactionFilters, RefreshedData } from "../types/dashboard";
 import { Account } from "../pages/AccountsPage";
+import { PeriodPicker } from "./PeriodPicker";
+import { Field, control, MutationForm } from "./FinanceForms";
 
 export function Overview({ dashboard, preference, onBillStatusChange }: { dashboard: DashboardData; preference: DashboardPreference; onBillStatusChange: (bill: Bill) => Promise<void> }) {
   const hidden = new Set(preference.hiddenWidgets);
@@ -286,6 +288,7 @@ export function TransactionsView({
       </Panel>
 
       <Panel title="Historico de movimentacoes">
+        {pagination.summary && <p className="mb-4 text-sm">Total nos filtros: {pagination.total} registros · receitas {money(pagination.summary.income)} · despesas {money(pagination.summary.expense)} · resultado {money(pagination.summary.income - pagination.summary.expense)}</p>}
         <div className="mb-4 flex flex-wrap gap-2">
           <label className="flex h-10 items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 text-sm shadow-sm dark:border-slate-800 dark:bg-slate-900 dark:shadow-none">
             <Search size={16} />
@@ -296,6 +299,8 @@ export function TransactionsView({
           </label>
           <input aria-label="Ano do historico" type="number" min="2000" max="2200" placeholder="Todos os anos" value={filters.year} onChange={(event) => setFilters({ ...filters, year: event.target.value })} className="h-10 w-36 rounded-lg border border-slate-300 bg-white px-3 text-sm dark:border-slate-800 dark:bg-slate-900" />
           <Select name="filterType" value={filters.type} onChange={(value) => setFilters({ ...filters, type: value })} options={[["", "Todos"], ["INCOME", "Receitas"], ["EXPENSE", "Despesas"]]} />
+          <Select name="filterAccount" value={filters.accountId} onChange={(value) => setFilters({ ...filters, accountId: value })} options={[["", "Todas as contas"], ...accounts.map(item => [item.id, item.name] as [string, string])]} />
+          <Select name="filterReconciled" value={filters.reconciled} onChange={(value) => setFilters({ ...filters, reconciled: value })} options={[["", "Toda conciliacao"], ["true", "Conciliadas"], ["false", "Nao conciliadas"]]} />
           <input value={filters.search} onChange={(event) => setFilters({ ...filters, search: event.target.value })} placeholder="Buscar" className="h-10 rounded-lg border border-slate-300 bg-white px-3 text-sm shadow-sm outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 dark:border-slate-800 dark:bg-slate-900 dark:shadow-none" />
           <Select name="categoryFilter" value={filters.categoryId} onChange={(value) => setFilters({ ...filters, categoryId: value })} options={[["", "Categorias"], ...categories.map((item) => [item.id, item.name] as [string, string])]} />
           <Select name="tagFilter" value={filters.tagId} onChange={(value) => setFilters({ ...filters, tagId: value })} options={[["", "Tags"], ...tags.map((item) => [item.id, item.name] as [string, string])]} />
@@ -377,13 +382,15 @@ export function PlanningView({
   onRefresh: () => Promise<RefreshedData | null>;
 }) {
   const now = new Date();
+  const [period, setPeriod] = useState({ month: now.getMonth() + 1, year: now.getFullYear() });
+  const [editingRule, setEditingRule] = useState<RecurringRule | null>(null);
   const [budgets, setBudgets] = useState<Budget[]>([]);
   const [rules, setRules] = useState<RecurringRule[]>([]);
   const [saving, setSaving] = useState(false);
 
   async function loadPlanning() {
     const [budgetResponse, rulesResponse] = await Promise.all([
-      api.get<Budget[]>("/budgets", { params: { month: now.getMonth() + 1, year: now.getFullYear() } }),
+      api.get<Budget[]>("/budgets", { params: period }),
       api.get<RecurringRule[]>("/recurring-rules")
     ]);
     setBudgets(budgetResponse.data);
@@ -392,7 +399,7 @@ export function PlanningView({
 
   useEffect(() => {
     loadPlanning().catch(() => notify("error", "Nao foi possivel carregar o planejamento."));
-  }, []);
+  }, [period]);
 
   async function submitInstallments(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -426,8 +433,8 @@ export function PlanningView({
       await api.post("/budgets", {
         categoryId: form.get("categoryId"),
         limitAmount: Number(form.get("limitAmount")),
-        month: now.getMonth() + 1,
-        year: now.getFullYear()
+        month: period.month,
+        year: period.year
       });
       formElement.reset();
       await loadPlanning();
@@ -479,6 +486,7 @@ export function PlanningView({
 
   return (
     <div className="grid gap-5">
+      <PeriodPicker {...period} onChange={(month, year) => setPeriod({ month, year })} />
       <section className="grid gap-5 xl:grid-cols-3">
         <Panel title="Compra parcelada">
           <form onSubmit={submitInstallments} className="grid gap-3">
@@ -526,11 +534,20 @@ export function PlanningView({
           ))}
         </Panel>
         <Panel title="Regras recorrentes">
+          {editingRule && <div className="mb-4 rounded-lg border p-4">
+            <MutationForm endpoint={`/recurring-rules/${editingRule.id}`} method="patch" notify={notify} onSaved={async () => { setEditingRule(null); await loadPlanning(); await onRefresh(); }}>
+              <Field label="Descricao"><input className={control} name="title" defaultValue={editingRule.title} required minLength={2} maxLength={160} /></Field>
+              <Field label="Valor"><input className={control} name="amount" type="number" step="0.01" min="0.01" defaultValue={editingRule.amount} required /></Field>
+              <Field label="Frequencia"><select className={control} name="frequency" defaultValue={editingRule.frequency}><option value="WEEKLY">Semanal</option><option value="MONTHLY">Mensal</option><option value="YEARLY">Anual</option></select></Field>
+              <Field label="Intervalo"><input className={control} name="interval" type="number" min="1" max="120" defaultValue={editingRule.interval} required /></Field>
+              <Field label="Proxima execucao"><input className={control} name="nextRunAt" type="date" defaultValue={editingRule.nextRunAt.slice(0, 10)} required /></Field>
+            </MutationForm><button className="mt-3 text-sm underline" onClick={() => setEditingRule(null)}>Cancelar</button>
+          </div>}
           {rules.length === 0 && <p className="text-sm text-slate-500">Nenhuma regra recorrente cadastrada.</p>}
           {rules.map((rule) => (
             <article key={rule.id} className="mb-3 flex items-center justify-between gap-3 rounded-lg border border-slate-200 p-3 text-sm dark:border-slate-800">
               <div><strong>{rule.title}</strong><p className="mt-1 text-slate-500">{money(Number(rule.amount))} · {rule.frequency.toLowerCase()} · proxima: {dateLabel(rule.nextRunAt)}</p></div>
-              <button onClick={() => void remove("recurring-rules", rule.id)} className="text-red-600"><Trash2 size={16} /></button>
+              <div className="flex flex-wrap gap-3"><button className="underline" onClick={() => setEditingRule(rule)}>Editar</button><button className="underline" onClick={() => { void api.patch(`/recurring-rules/${rule.id}`, { active: !rule.active }).then(loadPlanning).catch(() => notify("error", "Nao foi possivel alterar a regra.")); }}>{rule.active ? "Pausar" : "Reativar"}</button><button aria-label={`Excluir regra ${rule.title}`} onClick={() => void remove("recurring-rules", rule.id)} className="text-red-600"><Trash2 size={16} /></button></div>
             </article>
           ))}
         </Panel>
@@ -549,6 +566,7 @@ export function InsightsView({
   notify: (type: "success" | "error", message: string) => void;
 }) {
   const now = new Date();
+  const [period, setPeriod] = useState({ month: now.getMonth() + 1, year: now.getFullYear() });
   const [closing, setClosing] = useState<MonthlyClosing | null>(null);
   const [alerts, setAlerts] = useState<InternalAlert[]>([]);
   const [reserve, setReserve] = useState<EmergencyReserve | null>(null);
@@ -557,7 +575,7 @@ export function InsightsView({
 
   async function loadInsights() {
     const [closingResponse, alertsResponse, reserveResponse, logsResponse, sessionsResponse] = await Promise.all([
-      api.get("/monthly-closing", { params: { month: now.getMonth() + 1, year: now.getFullYear() } }),
+      api.get("/monthly-closing", { params: period }),
       api.get("/alerts"),
       api.get("/emergency-reserve"),
       api.get("/audit-logs"),
@@ -572,10 +590,10 @@ export function InsightsView({
 
   useEffect(() => {
     loadInsights().catch(() => notify("error", "Nao foi possivel carregar os insights."));
-  }, []);
+  }, [period]);
 
   async function closeMonth() {
-    await api.post("/monthly-closing", { month: now.getMonth() + 1, year: now.getFullYear() });
+    await api.post("/monthly-closing", period);
     await loadInsights();
     notify("success", "Fechamento mensal salvo.");
   }
@@ -610,12 +628,13 @@ export function InsightsView({
       </section>
       <section className="grid gap-5 xl:grid-cols-2">
         <Panel title="Fechamento mensal">
+          <PeriodPicker {...period} onChange={(month, year) => setPeriod({ month, year })} />
           <p className="text-sm text-slate-500">Compare o realizado com seus limites e registre uma fotografia deste mes.</p>
           <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
             <p>Receitas<br /><strong>{money(closing?.income ?? 0)}</strong></p><p>Despesas<br /><strong>{money(closing?.expense ?? 0)}</strong></p>
             <p>Orcamento<br /><strong>{money(closing?.budgetTotal ?? 0)}</strong></p><p>Resultado<br /><strong>{money(closing?.balance ?? 0)}</strong></p>
           </div>
-          <button onClick={closeMonth} className="mt-4 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white">{closing?.saved ? "Atualizar fechamento" : "Fechar mes"}</button>
+          <button onClick={() => void closeMonth().catch(() => notify("error", "Nao foi possivel fechar o mes."))} className="mt-4 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white">{closing?.saved ? "Atualizar fechamento" : "Fechar mes"}</button>
         </Panel>
         <Panel title="Alertas internos">
           {alerts.length === 0 && <p className="text-sm text-slate-500">Tudo tranquilo por aqui.</p>}
@@ -630,7 +649,7 @@ export function InsightsView({
           <Select name="chartMonths" value={String(preference.chartMonths)} onChange={(value) => void savePreference({ ...preference, chartMonths: Number(value) })} options={[["3", "Ultimos 3 meses"], ["6", "Ultimos 6 meses"], ["12", "Ultimos 12 meses"]]} />
         </Panel>
         <Panel title="Sessoes ativas">
-          <button onClick={revokeOtherSessions} className="mb-3 rounded-lg border border-red-200 px-3 py-2 text-sm font-semibold text-red-600">Encerrar outras sessoes</button>
+          <button onClick={() => void revokeOtherSessions().catch(() => notify("error", "Nao foi possivel encerrar as sessoes."))} className="mb-3 rounded-lg border border-red-200 px-3 py-2 text-sm font-semibold text-red-600">Encerrar outras sessoes</button>
           {sessions.map((session) => <article key={session.id} className="mb-2 rounded-lg border border-slate-200 p-3 text-sm dark:border-slate-800"><strong>{session.current ? "Sessao atual" : "Outro dispositivo"}</strong><p className="mt-1 text-slate-500">{session.userAgent ?? "Dispositivo nao identificado"} · {session.ipAddress ?? "IP indisponivel"}</p></article>)}
         </Panel>
       </section>
@@ -1588,6 +1607,8 @@ export function transactionParams(filters: TransactionFilters, page: number, req
     search: filters.search.trim() || undefined,
     categoryId: filters.categoryId || undefined,
     tagId: filters.tagId || undefined,
+    accountId: filters.accountId || undefined,
+    reconciled: filters.reconciled || undefined,
     minAmount: filters.minAmount || undefined,
     maxAmount: filters.maxAmount || undefined,
     page,
