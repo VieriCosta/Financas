@@ -180,6 +180,7 @@ export async function ensureRecurringBills(userId: string, referenceDate = new D
           isRecurring: true,
           recurrenceDay,
           reminderAt: bill.reminderAt,
+          accountId: bill.accountId,
           userId
         }
       });

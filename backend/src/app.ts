@@ -17,6 +17,7 @@ import { dataRoutes } from "./routes/data.routes.js";
 import { settingsRoutes } from "./routes/settings.routes.js";
 
 export const app = express();
+app.set("query parser", "simple");
 
 if (env.TRUST_PROXY > 0) {
   app.set("trust proxy", env.TRUST_PROXY);

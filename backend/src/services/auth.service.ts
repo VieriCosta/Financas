@@ -23,12 +23,12 @@ export async function registerUser(input: { name: string; email: string; passwor
       passwordHash,
       categories: {
         create: [
-          { name: "Salario", type: "INCOME", color: "#16a34a", icon: "Briefcase" },
+          { name: "Salário", type: "INCOME", color: "#16a34a", icon: "Briefcase" },
           { name: "Freelas", type: "INCOME", color: "#0ea5e9", icon: "Laptop" },
-          { name: "Alimentacao", type: "EXPENSE", color: "#f97316", icon: "Utensils" },
+          { name: "Alimentação", type: "EXPENSE", color: "#f97316", icon: "Utensils" },
           { name: "Transporte", type: "EXPENSE", color: "#6366f1", icon: "Car" },
           { name: "Aluguel", type: "EXPENSE", color: "#ef4444", icon: "Home" },
-          { name: "Cartao de credito", type: "EXPENSE", color: "#a855f7", icon: "CreditCard" }
+          { name: "Cartão de crédito", type: "EXPENSE", color: "#a855f7", icon: "CreditCard" }
         ]
       }
     },

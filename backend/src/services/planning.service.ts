@@ -21,6 +21,7 @@ export async function createInstallments(userId: string, input: InstallmentInput
   const installmentGroupId = randomUUID();
   const totalInCents = Math.round(input.totalAmount * 100);
   const baseInCents = Math.floor(totalInCents / input.installments);
+  if (baseInCents < 1) throw new AppError("Cada parcela deve ter pelo menos um centavo.", 400);
   const transactions = [];
 
   for (let index = 0; index < input.installments; index += 1) {
@@ -141,7 +142,7 @@ export async function getFinancialProjection(userId: string) {
     prisma.transaction.findMany({ where: { userId, creditCardId: { not: null } }, include: { creditCard: true } })
   ]);
   const currentBalance = sumTransactions(pastTransactions) + accounts.reduce((sum, account) => sum + Number(account.openingBalance), 0) - Number(paidBills._sum.amount ?? 0) - payments.filter(item => item.date <= now).reduce((sum, item) => sum + Number(item.amount), 0);
-  const scheduledBalance = sumTransactions(scheduledTransactions);
+  const scheduledBalance = sumTransactions(scheduledTransactions) - payments.filter(item => item.date > now && item.date <= end).reduce((sum, item) => sum + Number(item.amount), 0);
   const { invoiceDueDate } = await import("./ledger.service.js");
   const cardDue = cardExpenses.filter(item => item.creditCard && item.invoiceMonth && invoiceDueDate(item.invoiceMonth, item.creditCard.closingDay, item.creditCard.dueDay) <= end).reduce((sum, item) => sum + Number(item.amount), 0);
   const cardPaid = payments.filter(item => invoiceDueDate(item.invoiceMonth, item.creditCard.closingDay, item.creditCard.dueDay) <= end).reduce((sum, item) => sum + Number(item.amount), 0);

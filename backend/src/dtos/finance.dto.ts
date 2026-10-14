@@ -1,35 +1,45 @@
-import { BillStatus, InvestmentType, RecurrenceFrequency, RecurringResourceType, TransactionType } from "@prisma/client";
+import {
+  BillStatus,
+  InvestmentType,
+  RecurrenceFrequency,
+  RecurringResourceType,
+  TransactionType,
+} from "@prisma/client";
 import { z } from "zod";
+import { amount } from "./ledger.dto.js";
 
 export const categoryDto = z.object({
   name: z.string().trim().min(2).max(80),
-  color: z.string().regex(/^#[0-9a-f]{6}$/i).default("#2563eb"),
+  color: z
+    .string()
+    .regex(/^#[0-9a-f]{6}$/i)
+    .default("#2563eb"),
   icon: z.string().trim().min(1).max(40).default("Wallet"),
-  type: z.nativeEnum(TransactionType).optional()
+  type: z.nativeEnum(TransactionType).nullable().optional(),
 });
 
 export const transactionDto = z.object({
   description: z.string().trim().min(2).max(160),
-  amount: z.coerce.number().finite().positive(),
+  amount,
   type: z.nativeEnum(TransactionType),
   date: z.coerce.date(),
-  categoryId: z.string().uuid().optional(),
-  notes: z.string().trim().max(1000).optional()
-  ,accountId: z.string().uuid().nullable().optional()
-  ,reconciled: z.boolean().optional()
+  categoryId: z.string().uuid().nullable().optional(),
+  notes: z.string().trim().max(1000).optional(),
+  accountId: z.string().uuid().nullable().optional(),
+  reconciled: z.boolean().optional(),
 });
 
 export const updateTransactionDto = transactionDto.partial();
 
 export const billDto = z.object({
   title: z.string().trim().min(2).max(160),
-  amount: z.coerce.number().finite().positive(),
+  amount,
   dueDate: z.coerce.date(),
   status: z.nativeEnum(BillStatus).default(BillStatus.PENDING),
   isRecurring: z.coerce.boolean().default(false),
-  recurrenceDay: z.coerce.number().min(1).max(31).optional(),
-  reminderAt: z.coerce.date().optional()
-  ,accountId: z.string().uuid().nullable().optional()
+  recurrenceDay: z.coerce.number().int().min(1).max(31).optional(),
+  reminderAt: z.coerce.date().optional(),
+  accountId: z.string().uuid().nullable().optional(),
 });
 
 export const updateBillDto = billDto.partial();
@@ -56,93 +66,122 @@ export const investmentDto = z.object({
   custodyLocation: z.string().trim().min(1).max(160).optional(),
   walletAddress: z.string().trim().min(1).max(255).optional(),
   notes: z.string().trim().min(1).max(1000).optional(),
-  referenceDate: z.coerce.date().optional()
+  referenceDate: z.coerce.date().optional(),
 });
 
 export const updateInvestmentDto = investmentDto.partial().extend({
-  addContribution: z.coerce.number().finite().positive().optional()
+  addContribution: z.coerce.number().finite().positive().optional(),
 });
 
 export const goalDto = z.object({
   title: z.string().trim().min(2).max(160),
-  targetAmount: z.coerce.number().finite().positive(),
+  targetAmount: amount,
   currentAmount: z.coerce.number().finite().nonnegative().default(0),
-  deadline: z.coerce.date().optional()
+  deadline: z.coerce.date().optional(),
 });
 
 export const updateGoalDto = goalDto.partial().extend({
-  addAmount: z.coerce.number().finite().positive().optional()
+  addAmount: z.coerce.number().finite().positive().optional(),
 });
 
-export const financeFiltersDto = z.object({
-  month: z.coerce.number().int().min(1).max(12).optional(),
-  year: z.coerce.number().int().min(2000).max(2200).optional(),
-  categoryId: z.string().uuid().optional(),
-  type: z.nativeEnum(TransactionType).optional(),
-  from: z.coerce.date().optional(),
-  to: z.coerce.date().optional(),
-  page: z.coerce.number().int().min(1).default(1),
-  pageSize: z.coerce.number().int().min(1).max(100).default(20),
-  search: z.string().trim().min(1).max(100).optional(),
-  minAmount: z.coerce.number().finite().nonnegative().optional(),
-  maxAmount: z.coerce.number().finite().nonnegative().optional(),
-  tagId: z.string().uuid().optional()
-  ,accountId: z.string().uuid().optional()
-  ,reconciled: z.enum(["true", "false"]).transform(value => value === "true").optional()
-}).refine((filters) => filters.minAmount == null || filters.maxAmount == null || filters.minAmount <= filters.maxAmount, {
-  path: ["maxAmount"], message: "O valor maximo deve ser maior ou igual ao minimo."
-}).refine((filters) => !filters.from || !filters.to || filters.from <= filters.to, {
-  path: ["to"], message: "A data final deve ser maior ou igual a inicial."
-});
+export const financeFiltersDto = z
+  .object({
+    month: z.coerce.number().int().min(1).max(12).optional(),
+    year: z.coerce.number().int().min(2000).max(2200).optional(),
+    categoryId: z.string().uuid().optional(),
+    type: z.nativeEnum(TransactionType).optional(),
+    from: z.coerce.date().optional(),
+    to: z.coerce.date().optional(),
+    page: z.coerce.number().int().min(1).default(1),
+    pageSize: z.coerce.number().int().min(1).max(100).default(20),
+    search: z.string().trim().min(1).max(100).optional(),
+    minAmount: z.coerce.number().finite().nonnegative().optional(),
+    maxAmount: z.coerce.number().finite().nonnegative().optional(),
+    tagId: z.string().uuid().optional(),
+    accountId: z.string().uuid().optional(),
+    reconciled: z
+      .enum(["true", "false"])
+      .transform((value) => value === "true")
+      .optional(),
+  })
+  .refine(
+    (filters) =>
+      filters.minAmount == null ||
+      filters.maxAmount == null ||
+      filters.minAmount <= filters.maxAmount,
+    {
+      path: ["maxAmount"],
+      message: "O valor maximo deve ser maior ou igual ao minimo.",
+    },
+  )
+  .refine(
+    (filters) => !filters.from || !filters.to || filters.from <= filters.to,
+    {
+      path: ["to"],
+      message: "A data final deve ser maior ou igual a inicial.",
+    },
+  );
 
 export const bulkTransactionsDto = z.object({
   ids: z.array(z.string().uuid()).min(1).max(100),
   action: z.enum(["DELETE", "SET_CATEGORY", "ADD_TAG"]),
   categoryId: z.string().uuid().optional(),
-  tagId: z.string().uuid().optional()
+  tagId: z.string().uuid().optional(),
 });
 
 export const tagDto = z.object({
   name: z.string().trim().min(1).max(40),
-  color: z.string().regex(/^#[0-9a-f]{6}$/i).default("#2563eb")
+  color: z
+    .string()
+    .regex(/^#[0-9a-f]{6}$/i)
+    .default("#2563eb"),
 });
 
 export const dashboardPreferenceDto = z.object({
   hiddenWidgets: z.array(z.string().max(40)).max(20),
   widgetOrder: z.array(z.string().max(40)).max(20),
-  chartMonths: z.coerce.number().int().min(3).max(12)
+  chartMonths: z.coerce.number().int().min(3).max(12),
 });
 
 export const installmentDto = z.object({
   description: z.string().trim().min(2).max(160),
-  totalAmount: z.coerce.number().finite().positive(),
+  totalAmount: amount,
   installments: z.coerce.number().int().min(2).max(120),
   firstDate: z.coerce.date(),
   categoryId: z.string().uuid().optional(),
-  notes: z.string().trim().max(1000).optional()
+  notes: z.string().trim().max(1000).optional(),
 });
 
 export const budgetDto = z.object({
   categoryId: z.string().uuid(),
-  limitAmount: z.coerce.number().finite().positive(),
+  limitAmount: amount,
   month: z.coerce.number().int().min(1).max(12),
-  year: z.coerce.number().int().min(2000).max(2200)
+  year: z.coerce.number().int().min(2000).max(2200),
 });
 
-export const recurringRuleDto = z.object({
-  resource: z.nativeEnum(RecurringResourceType),
-  title: z.string().trim().min(2).max(160),
-  amount: z.coerce.number().finite().positive(),
-  transactionType: z.nativeEnum(TransactionType).optional(),
-  categoryId: z.string().uuid().optional(),
-  frequency: z.nativeEnum(RecurrenceFrequency),
-  interval: z.coerce.number().int().min(1).max(120).default(1),
-  dayOfMonth: z.coerce.number().int().min(1).max(31).optional(),
-  dayOfWeek: z.coerce.number().int().min(0).max(6).optional(),
-  nextRunAt: z.coerce.date(),
-  active: z.coerce.boolean().default(true)
-}).superRefine((value, context) => {
-  if (value.resource === RecurringResourceType.TRANSACTION && !value.transactionType) {
-    context.addIssue({ code: "custom", path: ["transactionType"], message: "Informe o tipo da movimentacao recorrente." });
-  }
-});
+export const recurringRuleDto = z
+  .object({
+    resource: z.nativeEnum(RecurringResourceType),
+    title: z.string().trim().min(2).max(160),
+    amount,
+    transactionType: z.nativeEnum(TransactionType).optional(),
+    categoryId: z.string().uuid().optional(),
+    frequency: z.nativeEnum(RecurrenceFrequency),
+    interval: z.coerce.number().int().min(1).max(120).default(1),
+    dayOfMonth: z.coerce.number().int().min(1).max(31).optional(),
+    dayOfWeek: z.coerce.number().int().min(0).max(6).optional(),
+    nextRunAt: z.coerce.date(),
+    active: z.coerce.boolean().default(true),
+  })
+  .superRefine((value, context) => {
+    if (
+      value.resource === RecurringResourceType.TRANSACTION &&
+      !value.transactionType
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["transactionType"],
+        message: "Informe o tipo da movimentacao recorrente.",
+      });
+    }
+  });

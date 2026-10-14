@@ -39,12 +39,13 @@ export async function bulkTransactions(req: Request, res: Response) {
   }
   if (data.action === "SET_CATEGORY") {
     if (!data.categoryId) throw new AppError("Informe uma categoria.", 400);
-    const category = await prisma.category.findFirst({ where: { id: data.categoryId, userId: req.userId } });
+    const category = await prisma.category.findFirst({ where: { id: data.categoryId, userId: req.userId, archived: false } });
     if (!category) throw new AppError("Categoria invalida.", 400);
+    if (category.type && await prisma.transaction.count({ where: { id: { in: data.ids }, userId: req.userId, type: { not: category.type } } })) throw new AppError("Categoria incompativel com as movimentacoes selecionadas.", 400);
     await prisma.transaction.updateMany({ where: { userId: req.userId, id: { in: data.ids } }, data: { categoryId: data.categoryId } });
   }
   if (data.action === "ADD_TAG") {
-    if (!data.tagId || !await prisma.tag.findFirst({ where: { id: data.tagId, userId: req.userId } })) throw new AppError("Tag invalida.", 400);
+    if (!data.tagId || !await prisma.tag.findFirst({ where: { id: data.tagId, userId: req.userId, archived: false } })) throw new AppError("Tag invalida.", 400);
     await prisma.transactionTag.createMany({ data: data.ids.map((transactionId) => ({ transactionId, tagId: data.tagId! })), skipDuplicates: true });
   }
   await audit(req.userId, data.action, "TRANSACTION_BULK", undefined, { count: data.ids.length });

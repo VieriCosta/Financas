@@ -125,7 +125,7 @@ export async function updateTransaction(req: Request, res: Response) {
 
   await ensureCategoryOwnership(
     req.userId,
-    data.categoryId ?? currentTransaction.categoryId ?? undefined,
+    (data.categoryId !== undefined ? data.categoryId : currentTransaction.categoryId) ?? undefined,
     data.type ?? currentTransaction.type
   );
 
@@ -167,10 +167,12 @@ export async function updateBill(req: Request, res: Response) {
   const data = updateBillDto.parse(req.body);
   const billId = String(req.params.id);
   await ensureAccount(req.userId, data.accountId);
+  const current = await prisma.bill.findFirst({ where: { id: billId, userId: req.userId } });
+  if (!current) throw new AppError("Conta nao encontrada.", 404);
 
   await prisma.bill.updateMany({
     where: { id: billId, userId: req.userId },
-    data: { ...data, ...(data.status ? { paidAt: data.status === "PAID" ? new Date() : null } : {}) }
+    data: { ...data, ...(data.status ? { paidAt: data.status === "PAID" ? current.paidAt ?? new Date() : null } : {}) }
   });
 
   const bill = await prisma.bill.findFirstOrThrow({
@@ -269,7 +271,7 @@ export async function deleteGoal(req: Request, res: Response) {
   return res.status(204).send();
 }
 
-async function ensureCategoryOwnership(userId: string, categoryId: string | undefined, transactionType: "INCOME" | "EXPENSE") {
+async function ensureCategoryOwnership(userId: string, categoryId: string | null | undefined, transactionType: "INCOME" | "EXPENSE") {
   if (!categoryId) return;
 
   const category = await prisma.category.findFirst({
