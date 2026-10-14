@@ -16,7 +16,7 @@ export type Category = {
   name: string;
   color: string;
   icon: string;
-  type?: TransactionType;
+  type?: TransactionType | null;
   archived?: boolean;
 };
 

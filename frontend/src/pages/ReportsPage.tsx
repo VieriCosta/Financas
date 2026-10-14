@@ -1,25 +1,262 @@
 import { useEffect, useState } from "react";
 import { api } from "../api/client";
 import { Category } from "../types/finance";
-import { action, control, Field, Notify, panel } from "../components/FinanceForms";
+import {
+  action,
+  control,
+  Field,
+  Notify,
+  panel,
+} from "../components/FinanceForms";
 import { money, dateLabel } from "../utils/format";
 
-type Report = { income: number; expense: number; balance: number; count: number; paidBills: number; previous: { from: string; to: string; income: number; expense: number; balance: number }; categories: Array<{ name: string; income: number; expense: number }>; months: Array<{ month: string; income: number; expense: number }> };
-export default function ReportsPage({ categories, notify }: { categories: Category[]; notify: Notify }) {
+type Report = {
+  income: number;
+  expense: number;
+  balance: number;
+  count: number;
+  paidBills: number;
+  previous: {
+    from: string;
+    to: string;
+    income: number;
+    expense: number;
+    balance: number;
+  };
+  categories: Array<{ name: string; income: number; expense: number }>;
+  months: Array<{ month: string; income: number; expense: number }>;
+};
+export default function ReportsPage({
+  categories,
+  notify,
+}: {
+  categories: Category[];
+  notify: Notify;
+}) {
   const now = new Date();
-  const [filters, setFilters] = useState({ from: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`, to: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`, categoryId: "", type: "", search: "" });
+  const [filters, setFilters] = useState({
+    from: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`,
+    to: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`,
+    categoryId: "",
+    type: "",
+    search: "",
+  });
   const [report, setReport] = useState<Report | null>(null);
   const [busy, setBusy] = useState(false);
-  const params = { ...filters, from: `${filters.from}T00:00:00Z`, to: `${filters.to}T23:59:59.999Z`, categoryId: filters.categoryId || undefined, type: filters.type || undefined, search: filters.search.trim() || undefined };
+  const params = {
+    ...filters,
+    from: `${filters.from}T00:00:00Z`,
+    to: `${filters.to}T23:59:59.999Z`,
+    categoryId: filters.categoryId || undefined,
+    type: filters.type || undefined,
+    search: filters.search.trim() || undefined,
+  };
   useEffect(() => {
-    let disposed = false; setBusy(true);
-    const timer = window.setTimeout(() => { void api.get<Report>("/reports", { params }).then(response => { if (!disposed) setReport(response.data); }).catch(() => { if (!disposed) { setReport(null); notify("error", "Nao foi possivel gerar o relatorio. Confira o periodo."); } }).finally(() => { if (!disposed) setBusy(false); }); }, 300);
-    return () => { disposed = true; window.clearTimeout(timer); };
+    let disposed = false;
+    setBusy(true);
+    const timer = window.setTimeout(() => {
+      void api
+        .get<Report>("/reports", { params })
+        .then((response) => {
+          if (!disposed) setReport(response.data);
+        })
+        .catch(() => {
+          if (!disposed) {
+            setReport(null);
+            notify(
+              "error",
+              "Não foi possível gerar o relatório. Confira o período.",
+            );
+          }
+        })
+        .finally(() => {
+          if (!disposed) setBusy(false);
+        });
+    }, 300);
+    return () => {
+      disposed = true;
+      window.clearTimeout(timer);
+    };
   }, [filters]);
   async function csv() {
-    try { const response = await api.get("/transactions/export.csv", { params, responseType: "blob" }); const url = URL.createObjectURL(response.data); const anchor = document.createElement("a"); anchor.href = url; anchor.download = `relatorio-${filters.from}-${filters.to}.csv`; anchor.click(); URL.revokeObjectURL(url); } catch { notify("error", "Nao foi possivel exportar o relatorio."); }
+    try {
+      const response = await api.get("/transactions/export.csv", {
+        params,
+        responseType: "blob",
+      });
+      const url = URL.createObjectURL(response.data);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = `relatório-${filters.from}-${filters.to}.csv`;
+      anchor.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      notify("error", "Não foi possível exportar o relatório.");
+    }
   }
-  return <div className="grid gap-5"><section className={panel}><h2 className="mb-4 text-lg font-semibold">Relatorio por periodo</h2><div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5"><Field label="Data inicial"><input className={control} type="date" value={filters.from} onChange={event => setFilters({ ...filters, from: event.target.value })} /></Field><Field label="Data final"><input className={control} type="date" value={filters.to} min={filters.from} onChange={event => setFilters({ ...filters, to: event.target.value })} /></Field><Field label="Categoria"><select className={control} value={filters.categoryId} onChange={event => setFilters({ ...filters, categoryId: event.target.value })}><option value="">Todas</option>{categories.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></Field><Field label="Tipo"><select className={control} value={filters.type} onChange={event => setFilters({ ...filters, type: event.target.value })}><option value="">Todos</option><option value="INCOME">Receitas</option><option value="EXPENSE">Despesas</option></select></Field><Field label="Busca"><input className={control} maxLength={100} value={filters.search} onChange={event => setFilters({ ...filters, search: event.target.value })} /></Field></div><button disabled={busy || !report} className={`${action} mt-4`} onClick={() => void csv()}>Exportar registros filtrados em CSV</button></section>
-    {busy ? <p role="status">Calculando...</p> : report && <><section className="grid gap-3 sm:grid-cols-3">{[["Receitas", report.income], ["Despesas", report.expense], ["Resultado", report.balance]].map(([label, value]) => <div className={panel} key={label}><p className="text-sm text-slate-500">{label}</p><strong className="text-2xl">{money(Number(value))}</strong></div>)}</section><section className={panel}><p>{report.count} movimentacoes nos filtros selecionados.</p><p className="mt-2 text-sm text-slate-500">Contas da agenda pagas no periodo: {money(report.paidBills)} (total separado, sem filtros de categoria ou busca). Transferencias e pagamentos de fatura ficam fora das receitas e despesas.</p><p className="mt-3 text-sm">Periodo anterior equivalente: {dateLabel(report.previous.from)} a {dateLabel(report.previous.to)} · receitas {money(report.previous.income)} · despesas {money(report.previous.expense)} · resultado {money(report.previous.balance)}.</p></section><div className="grid gap-5 lg:grid-cols-2"><section className={panel}><h2 className="mb-3 font-semibold">Por categoria</h2>{!report.categories.length && <p>Nenhuma movimentacao neste periodo.</p>}<div className="overflow-auto"><table className="w-full text-left text-sm"><thead><tr><th className="py-2">Categoria</th><th>Receitas</th><th>Despesas</th></tr></thead><tbody>{report.categories.map(item => <tr key={item.name}><td className="py-2">{item.name}</td><td>{money(item.income)}</td><td>{money(item.expense)}</td></tr>)}</tbody></table></div></section><section className={panel}><h2 className="mb-3 font-semibold">Comparacao mensal</h2><div className="overflow-auto"><table className="w-full text-left text-sm"><thead><tr><th className="py-2">Mes</th><th>Receitas</th><th>Despesas</th><th>Resultado</th></tr></thead><tbody>{report.months.map(item => <tr key={item.month}><td className="py-2">{item.month}</td><td>{money(item.income)}</td><td>{money(item.expense)}</td><td>{money(item.income - item.expense)}</td></tr>)}</tbody></table></div></section></div></>}
-  </div>;
+  return (
+    <div className="grid gap-5">
+      <section className={panel}>
+        <h2 className="mb-4 text-lg font-semibold">Relatório por período</h2>
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+          <Field label="Data inicial">
+            <input
+              className={control}
+              type="date"
+              value={filters.from}
+              onChange={(event) =>
+                setFilters({ ...filters, from: event.target.value })
+              }
+            />
+          </Field>
+          <Field label="Data final">
+            <input
+              className={control}
+              type="date"
+              value={filters.to}
+              min={filters.from}
+              onChange={(event) =>
+                setFilters({ ...filters, to: event.target.value })
+              }
+            />
+          </Field>
+          <Field label="Categoria">
+            <select
+              className={control}
+              value={filters.categoryId}
+              onChange={(event) =>
+                setFilters({ ...filters, categoryId: event.target.value })
+              }
+            >
+              <option value="">Todas</option>
+              {categories.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.name}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field label="Tipo">
+            <select
+              className={control}
+              value={filters.type}
+              onChange={(event) =>
+                setFilters({ ...filters, type: event.target.value })
+              }
+            >
+              <option value="">Todos</option>
+              <option value="INCOME">Receitas</option>
+              <option value="EXPENSE">Despesas</option>
+            </select>
+          </Field>
+          <Field label="Busca">
+            <input
+              className={control}
+              maxLength={100}
+              value={filters.search}
+              onChange={(event) =>
+                setFilters({ ...filters, search: event.target.value })
+              }
+            />
+          </Field>
+        </div>
+        <button
+          disabled={busy || !report}
+          className={`${action} mt-4`}
+          onClick={() => void csv()}
+        >
+          Exportar registros filtrados em CSV
+        </button>
+      </section>
+      {busy ? (
+        <p role="status">Calculando...</p>
+      ) : (
+        report && (
+          <>
+            <section className="grid gap-3 sm:grid-cols-3">
+              {[
+                ["Receitas", report.income],
+                ["Despesas", report.expense],
+                ["Resultado", report.balance],
+              ].map(([label, value]) => (
+                <div className={panel} key={label}>
+                  <p className="text-sm text-slate-500">{label}</p>
+                  <strong className="text-2xl">{money(Number(value))}</strong>
+                </div>
+              ))}
+            </section>
+            <section className={panel}>
+              <p>{report.count} movimentações nos filtros selecionados.</p>
+              <p className="mt-2 text-sm text-slate-500">
+                Contas da agenda pagas no período: {money(report.paidBills)}{" "}
+                (total separado, sem filtros de categoria ou busca).
+                Transferencias e pagamentos de fatura ficam fora das receitas e
+                despesas.
+              </p>
+              <p className="mt-3 text-sm">
+                Período anterior equivalente: {dateLabel(report.previous.from)}{" "}
+                a {dateLabel(report.previous.to)} · receitas{" "}
+                {money(report.previous.income)} · despesas{" "}
+                {money(report.previous.expense)} · resultado{" "}
+                {money(report.previous.balance)}.
+              </p>
+            </section>
+            <div className="grid gap-5 lg:grid-cols-2">
+              <section className={panel}>
+                <h2 className="mb-3 font-semibold">Por categoria</h2>
+                {!report.categories.length && (
+                  <p>Nenhuma movimentação neste período.</p>
+                )}
+                <div className="overflow-auto">
+                  <table className="w-full text-left text-sm">
+                    <thead>
+                      <tr>
+                        <th className="py-2">Categoria</th>
+                        <th>Receitas</th>
+                        <th>Despesas</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {report.categories.map((item) => (
+                        <tr key={item.name}>
+                          <td className="py-2">{item.name}</td>
+                          <td>{money(item.income)}</td>
+                          <td>{money(item.expense)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+              <section className={panel}>
+                <h2 className="mb-3 font-semibold">Comparação mensal</h2>
+                <div className="overflow-auto">
+                  <table className="w-full text-left text-sm">
+                    <thead>
+                      <tr>
+                        <th className="py-2">Mês</th>
+                        <th>Receitas</th>
+                        <th>Despesas</th>
+                        <th>Resultado</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {report.months.map((item) => (
+                        <tr key={item.month}>
+                          <td className="py-2">{item.month}</td>
+                          <td>{money(item.income)}</td>
+                          <td>{money(item.expense)}</td>
+                          <td>{money(item.income - item.expense)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+            </div>
+          </>
+        )
+      )}
+    </div>
+  );
 }

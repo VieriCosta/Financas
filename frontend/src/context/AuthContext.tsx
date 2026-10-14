@@ -1,4 +1,12 @@
-import { createContext, ReactNode, useContext, useEffect, useMemo, useRef, useState } from "react";
+import {
+  createContext,
+  ReactNode,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { api } from "../api/client";
 import { User } from "../types/finance";
 
@@ -37,7 +45,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const version = sessionVersion.current;
-    api.get("/auth/session")
+    api
+      .get("/auth/session")
       .then(({ data }) => persistSession(data))
       .catch(() => {
         if (sessionVersion.current === version) {
@@ -47,7 +56,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .finally(() => setLoading(false));
   }, []);
 
-  async function persistAuth(endpoint: "login" | "register", payload: Record<string, string>) {
+  async function persistAuth(
+    endpoint: "login" | "register",
+    payload: Record<string, string>,
+  ) {
     const { data } = await api.post(`/auth/${endpoint}`, payload);
     persistSession(data);
   }
@@ -57,7 +69,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       user,
       loading,
       login: (email, password) => persistAuth("login", { email, password }),
-      register: (name, email, password) => persistAuth("register", { name, email, password }),
+      register: (name, email, password) =>
+        persistAuth("register", { name, email, password }),
       updateUser: (nextUser) => {
         setUser(nextUser);
       },
@@ -67,9 +80,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         } finally {
           clearSession();
         }
-      }
+      },
     }),
-    [loading, user]
+    [loading, user],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
@@ -77,6 +90,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
 export function useAuth() {
   const context = useContext(AuthContext);
-  if (!context) throw new Error("useAuth deve ser usado dentro de AuthProvider");
+  if (!context)
+    throw new Error("useAuth deve ser usado dentro de AuthProvider");
   return context;
 }
