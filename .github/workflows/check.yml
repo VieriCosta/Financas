@@ -28,3 +28,5 @@ jobs:
       - run: npx prisma migrate deploy --schema backend/prisma/schema.prisma
       - run: npm run lint
       - run: npm run check
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e

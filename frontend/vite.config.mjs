@@ -4,10 +4,6 @@ import { defineConfig } from "vite";
 export default defineConfig({
   base: "./",
   plugins: [react()],
-  optimizeDeps: {
-    noDiscovery: true,
-    include: []
-  },
   server: {
     host: "0.0.0.0",
     port: 5173
