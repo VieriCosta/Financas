@@ -19,7 +19,7 @@ docker compose up -d postgres
 3. Configure `backend/.env`:
 
 ```text
-DATABASE_URL="postgresql://postgres:postgres@localhost:5432/financas"
+DATABASE_URL="postgresql://postgres:postgres@localhost:5433/financas"
 NODE_ENV="development"
 JWT_SECRET="troque-por-um-segredo-local-com-mais-de-32-caracteres"
 JWT_EXPIRES_IN="7d"
@@ -56,6 +56,7 @@ Para iniciar backend e frontend juntos, use `npm.cmd run dev`.
 Para verificar o build e os testes, use `npm.cmd run check`.
 `npm.cmd run start:frontend` continua disponivel para visualizar o build de producao.
 O roteiro de evolucao esta em [MELHORIAS.md](MELHORIAS.md).
+Migracoes, backup, restauracao e testes estao em [OPERACAO.md](OPERACAO.md).
 
 URLs:
 
