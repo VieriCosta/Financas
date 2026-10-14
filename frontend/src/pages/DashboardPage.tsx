@@ -1,53 +1,27 @@
 import { useFinanceData } from "../hooks/useFinanceData";
-import {
-  FormEvent,
-  ReactNode,
-  Suspense,
-  lazy,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { FormEvent, Suspense, lazy, useEffect, useMemo, useState } from "react";
 import axios from "axios";
 
 import {
-  CalendarClock,
-  BrainCircuit,
   Download,
-  LayoutDashboard,
   LogOut,
   Moon,
-  PiggyBank,
-  ReceiptText,
   Sparkles,
-  ShieldCheck,
-  SlidersHorizontal,
   Sun,
-  Target,
-  TrendingUp,
   UserRound,
   WalletCards,
 } from "lucide-react";
 import { api } from "../api/client";
 import { useAuth } from "../context/AuthContext";
-import {
-  Bill,
-  Category,
-  DashboardData,
-  DashboardPreference,
-  PaginatedTransactions,
-  Tag,
-} from "../types/finance";
+import { Bill } from "../types/finance";
 import { money } from "../utils/format";
 
-import { Toast, RefreshedData } from "../types/dashboard";
+import { Toast } from "../types/dashboard";
 import { Onboarding } from "../components/Onboarding";
 import {
   ToastMessage,
   readInvestmentPayload,
   transactionParams,
-  getApiErrorMessage,
 } from "../components/FinanceUI";
 
 const Overview = lazy(() =>
@@ -101,55 +75,10 @@ const ImportPage = lazy(() => import("./ImportPage"));
 const ReportsPage = lazy(() => import("./ReportsPage"));
 const BackupPage = lazy(() => import("./BackupPage"));
 const SettingsPage = lazy(() => import("./SettingsPage"));
-type ViewKey =
-  | "overview"
-  | "transactions"
-  | "agenda"
-  | "planning"
-  | "insights"
-  | "investments"
-  | "goals"
-  | "ai"
-  | "profile"
-  | "accounts"
-  | "cards"
-  | "import"
-  | "reports"
-  | "backup"
-  | "settings";
-
-const menuItems: Array<{ key: ViewKey; label: string; icon: ReactNode }> = [
-  { key: "overview", label: "Dashboard", icon: <LayoutDashboard size={21} /> },
-  {
-    key: "transactions",
-    label: "Movimentações",
-    icon: <ReceiptText size={21} />,
-  },
-  {
-    key: "accounts",
-    label: "Contas e carteiras",
-    icon: <WalletCards size={21} />,
-  },
-  { key: "cards", label: "Cartões e faturas", icon: <ReceiptText size={21} /> },
-  { key: "import", label: "Importar extrato", icon: <Download size={21} /> },
-  { key: "reports", label: "Relatórios", icon: <TrendingUp size={21} /> },
-  { key: "backup", label: "Backup dos dados", icon: <ShieldCheck size={21} /> },
-  {
-    key: "settings",
-    label: "Categorias e tags",
-    icon: <SlidersHorizontal size={21} />,
-  },
-  { key: "agenda", label: "Agenda", icon: <CalendarClock size={21} /> },
-  { key: "planning", label: "Planejamento", icon: <PiggyBank size={21} /> },
-  { key: "insights", label: "Insights", icon: <SlidersHorizontal size={21} /> },
-  {
-    key: "investments",
-    label: "Investimentos",
-    icon: <TrendingUp size={21} />,
-  },
-  { key: "goals", label: "Metas", icon: <Target size={21} /> },
-  { key: "ai", label: "Conselho de IA", icon: <BrainCircuit size={21} /> },
-];
+import {
+  WorkspaceNavigation,
+  ViewKey,
+} from "../components/WorkspaceNavigation";
 
 const viewTitles: Record<ViewKey, { title: string; subtitle: string }> = {
   accounts: {
@@ -552,23 +481,10 @@ export function DashboardPage() {
             </p>
           </div>
         </div>
-        <p className="sidebar-label">WORKSPACE</p>
-        <nav className="grid gap-1 px-3" aria-label="Navegação principal">
-          {menuItems.map((item) => (
-            <button
-              key={item.key}
-              aria-current={activeView === item.key ? "page" : undefined}
-              onClick={() => setActiveView(item.key)}
-              className={`nav-item flex h-12 items-center gap-3 rounded-lg px-3 text-sm font-medium transition ${
-                activeView === item.key ? "nav-item-active" : "nav-item-idle"
-              }`}
-              title={item.label}
-            >
-              {item.icon}
-              {item.label}
-            </button>
-          ))}
-        </nav>
+        <WorkspaceNavigation
+          activeView={activeView}
+          onNavigate={setActiveView}
+        />
         <div className="sidebar-foot">
           <span className="sidebar-foot-icon">
             <Sparkles size={17} />
@@ -639,22 +555,11 @@ export function DashboardPage() {
               </button>
             </div>
           </div>
-          <div className="mobile-nav mt-4 flex gap-2 overflow-x-auto lg:hidden">
-            {menuItems.map((item) => (
-              <button
-                key={item.key}
-                onClick={() => setActiveView(item.key)}
-                className={`flex h-10 shrink-0 items-center gap-2 rounded-lg px-3 text-sm font-medium ${
-                  activeView === item.key
-                    ? "mobile-nav-active"
-                    : "mobile-nav-idle"
-                }`}
-              >
-                {item.icon}
-                {item.label}
-              </button>
-            ))}
-          </div>
+          <WorkspaceNavigation
+            activeView={activeView}
+            onNavigate={setActiveView}
+            mobile
+          />
         </header>
 
         <div

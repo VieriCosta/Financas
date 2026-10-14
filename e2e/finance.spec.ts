@@ -19,6 +19,30 @@ async function navigate(page: Page, name: string) {
   const nav = mobile
     ? page.locator(".mobile-nav")
     : page.getByRole("navigation", { name: "Navegação principal" });
+  const sectorFor: Record<string, string> = {
+    Movimentações: "Dia a dia",
+    "Contas e carteiras": "Dia a dia",
+    "Cartões e faturas": "Dia a dia",
+    Agenda: "Dia a dia",
+    "Importar extrato": "Dia a dia",
+    Planejamento: "Planejamento",
+    Metas: "Planejamento",
+    Investimentos: "Planejamento",
+    Relatórios: "Análises",
+    Insights: "Análises",
+    "Conselho de IA": "Análises",
+    "Categorias e tags": "Organização",
+    "Backup dos dados": "Organização",
+    "Meu perfil": "Organização",
+  };
+  if (!(await nav.getByRole("button", { name, exact: true }).isVisible())) {
+    await nav
+      .getByRole("button", {
+        name: `Setor: ${sectorFor[name] ?? "Visão geral"}`,
+        exact: true,
+      })
+      .click();
+  }
   await nav.getByRole("button", { name, exact: true }).click();
 }
 test("cadastro, contas, compra parcelada, fatura, relatorio e backup", async ({
