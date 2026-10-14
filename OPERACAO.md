@@ -65,4 +65,4 @@ Os testes de interface usam Chrome instalado localmente. No CI, Playwright insta
 - Compras no dia do fechamento entram na proxima fatura. Parcelas ficam em movimentacoes e nas faturas correspondentes.
 - Importacao aceita CSV e OFX com ate 2 MB e 2000 lancamentos, com previa e escolha de categorias. Arquivos fora desses limites devem ser divididos.
 - SMTP e chamadas reais ao provedor de IA dependem das credenciais do ambiente. Os testes validam autenticacao e confirmacao de comandos sem chamar servicos externos.
-- A auditoria de dependencias ainda aponta alertas transitivos, incluindo ferramentas de desenvolvimento. Atualizacoes compativeis foram aplicadas; migracoes de versao principal dessas ferramentas exigem uma revisao propria. O parser de consultas da API usa o modo simples do Express.
+- A revisao de dependencias eliminou os alertas conhecidos no `npm audit`. Execute `npm.cmd run audit:security` para consultar novamente, pois a base de avisos muda com o tempo. Versoes, ajustes de compatibilidade e fontes estao em [DEPENDENCIAS.md](DEPENDENCIAS.md).
